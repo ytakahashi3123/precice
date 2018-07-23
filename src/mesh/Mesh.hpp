@@ -49,6 +49,7 @@ public:
   typedef utils::ptr_vector<PropertyContainer>   PropertyContainerContainer;
   typedef std::vector<std::pair<double, double>> BoundingBox;
   typedef std::map<int,BoundingBox>              BoundingBoxMap;
+  typedef std::map<int, std::vector<int>>        FeedbackMap; 
 
   /// A mapping from rank to used (not necessarily owned) vertex IDs
   using VertexDistribution = std::map<int, std::vector<int>>;
