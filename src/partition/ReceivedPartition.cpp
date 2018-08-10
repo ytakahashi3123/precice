@@ -1,5 +1,6 @@
 #include "partition/ReceivedPartition.hpp"
 #include "com/CommunicateMesh.hpp"
+#include "com/CommunicateBoundingBox.hpp"
 #include "com/Communication.hpp"
 #include "utils/MasterSlave.hpp"
 #include "m2n/M2N.hpp"
@@ -38,12 +39,22 @@ void ReceivedPartition::communicate()
   if (not utils::MasterSlave::_slaveMode) {
     assertion ( _mesh->vertices().size() == 0 );
     com::CommunicateMesh(_m2n->getMasterCommunication()).receiveMesh ( *_mesh, 0 );
+    com::CommunicateMesh(_m2n->getMasterCommunication()).receiveVector(vertexCounters, 0);
   }
 }
 
 void ReceivedPartition::compute()
 {
   TRACE(_geometricFilter);
+
+  //broacast received list of vertex ids
+  if (utils::MasterSlave::_masterMode) {
+    utils::MasterSlave::_communication->broadcast(vertexCounters);
+  }
+  else if (utils::MasterSlave::_slaveMode) {
+    utils::MasterSlave::_communication->broadcast(vertexCounters, 0);
+  }
+  
 
   // handle coupling mode first (i.e. serial participant)
   if (not utils::MasterSlave::_slaveMode && not utils::MasterSlave::_masterMode){ //coupling mode
@@ -208,13 +219,31 @@ void ReceivedPartition::compute()
   if (utils::MasterSlave::_slaveMode) {
     int numberOfVertices = _mesh->vertices().size();
     utils::MasterSlave::_communication->send(numberOfVertices,0);
-    if (numberOfVertices!=0) {
-      std::vector<int> vertexIDs(numberOfVertices,-1);
+    std::vector<int> vertexIDs(numberOfVertices,-1);
+    if (numberOfVertices!=0) {     
       for (int i=0; i<numberOfVertices; i++){
         vertexIDs[i] = _mesh->vertices()[i].getGlobalIndex();
       }
-      utils::MasterSlave::_communication->send(vertexIDs, 0);
+      utils::MasterSlave::_communication->send(vertexIDs, 0);    
     }
+          
+      int remoteParComSize = vertexCounters.size();// number of other particpants ranks
+
+      // This nested loop creats a fill in the localCommunicationbMap which shows this local rank needs which vertices from which rank of the other particpant
+      for (auto &remoteVertex : vertexIDs) {
+        for (int i=0; i <=remoteParComSize ; i++) {
+          if (remoteVertex <= vertexCounters[i]) {
+            localCommunicationMap[i].push_back(remoteVertex);
+            i=remoteParComSize+1;
+          }
+        }        
+      }
+
+      //localCommunicationMap is sent to the master rank
+      for (auto &localRanksMap : localCommunicationMap) {
+      utils::MasterSlave::_communication->send(localRanksMap.second, 0);
+      }
+      
     int globalNumberOfVertices = -1;
     utils::MasterSlave::_communication->broadcast(globalNumberOfVertices,0);
     assertion(globalNumberOfVertices!=-1);
@@ -237,6 +266,45 @@ void ReceivedPartition::compute()
       }
       _mesh->getVertexDistribution()[rankSlave] = slaveVertexIDs;
     }
+
+    
+      int remoteParComSize = vertexCounters.size(); // number of other particpants ranks
+      std::map<int, mesh::Mesh::FeedbackMap> globalCommunicationMap_localView; //a structure (from local participant point of view) to store global communication Map
+
+      for (auto &remoteVertex : vertexIDs) {
+        for (int i=0; i <=remoteParComSize ; i++) {
+          if (remoteVertex <= vertexCounters[i]) {
+            localCommunicationMap[i].push_back(remoteVertex);
+            i=remoteParComSize+1;
+          }
+        }        
+      }
+      globalCommunicationMap_localView[0] = localCommunicationMap;
+      
+      std::vector<int> receiveRankIDs;
+      for (int i=1; i<utils::MasterSlave::_size ; i++) {
+        localCommunicationMap.clear();
+        for (int j=0; j<remoteParComSize; j++) {
+          utils::MasterSlave::_communication->receive(receiveRankIDs,j);
+          localCommunicationMap[j] = receiveRankIDs;
+          receiveRankIDs.clear();
+        }
+        globalCommunicationMap_localView[i]=localCommunicationMap;        
+      }
+
+      std::map<int, mesh::Mesh::FeedbackMap> globalCommunicationMap_remoteView; //a structure (from remote participant point of view)  to store global communication Map
+        for (int k=0 ; k<utils::MasterSlave::_size; k++) {
+          for (int l=0; l<remoteParComSize; l++) {
+            globalCommunicationMap_localView[l][k] = globalCommunicationMap_remoteView[k][l];            
+          }          
+        }
+
+
+      for (auto &localmap : globalCommunicationMap_remoteView) {
+        com::CommunicateBoundingBox(_m2n->getMasterCommunication()).sendFeedbackMap(localmap.second, 0 );
+      }
+
+
     utils::MasterSlave::_communication->broadcast(_mesh->getGlobalNumberOfVertices());
   }
   e6.stop();

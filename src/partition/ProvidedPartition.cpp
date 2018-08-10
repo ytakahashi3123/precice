@@ -1,5 +1,6 @@
 #include "partition/ProvidedPartition.hpp"
 #include "com/CommunicateMesh.hpp"
+#include "com/CommunicateBoundingBox.hpp"
 #include "com/Communication.hpp"
 #include "utils/MasterSlave.hpp"
 #include "m2n/M2N.hpp"
@@ -32,7 +33,9 @@ void ProvidedPartition::communicate()
     mesh::Mesh globalMesh(_mesh->getName(), _mesh->getDimensions(), _mesh->isFlipNormals());
 
     if( not utils::MasterSlave::_slaveMode ){
+
       globalMesh.addMesh(*_mesh); //add local master mesh to global mesh
+      
     }
 
     // Gather Mesh
@@ -69,6 +72,7 @@ void ProvidedPartition::communicate()
     if (not utils::MasterSlave::_slaveMode) {
       CHECK ( globalMesh.vertices().size() > 0, "The provided mesh " << globalMesh.getName() << " is invalid (possibly empty).");
       com::CommunicateMesh(_m2n->getMasterCommunication()).sendMesh ( globalMesh, 0 );
+      com::CommunicateMesh(_m2n->getMasterCommunication()).sendVector(vertexCounters, 0);
     }
     e2.stop();
 
@@ -107,6 +111,8 @@ void ProvidedPartition::compute()
       vertexCounter++;
     }
 
+    vertexCounters[0]=vertexCounter;
+
     for (int rankSlave = 1; rankSlave < utils::MasterSlave::_size; rankSlave++){
       utils::MasterSlave::_communication->receive(numberOfVertices,rankSlave);
       utils::MasterSlave::_communication->send(vertexCounter,rankSlave);
@@ -115,6 +121,7 @@ void ProvidedPartition::compute()
         _mesh->getVertexDistribution()[rankSlave].push_back(vertexCounter);
         vertexCounter++;
       }
+      vertexCounters[rankSlave]=vertexCounter; //each element shows the maximum vertex ID of the corresponding rank!
     }
     _mesh->setGlobalNumberOfVertices(vertexCounter);
     utils::MasterSlave::_communication->broadcast(vertexCounter);
@@ -130,6 +137,28 @@ void ProvidedPartition::compute()
 
   computeVertexOffsets();
 }
+
+void ProvidedPartition::communicationMap()
+{
+
+  if (utils::MasterSlave::_masterMode) {
+    mesh::Mesh::FeedbackMap receiveCommunicationMap;
+    std::map<int, mesh::Mesh::FeedbackMap> globalCommunicationMap;    
+    for (int i = 0; i < utils::MasterSlave::_size; i++) {              
+    com::CommunicateBoundingBox(_m2n->getMasterCommunication()).receiveFeedbackMap(receiveCommunicationMap, 0 );
+    globalCommunicationMap[i]=receiveCommunicationMap;
+    }
+    
+    for (auto &localMap : globalCommunicationMap) {              
+      com::CommunicateBoundingBox(utils::MasterSlave::_communication).sendFeedbackMap(localMap.second, localMap.first);
+    }
+    
+  } else if (utils::MasterSlave::_slaveMode) {
+    com::CommunicateBoundingBox(utils::MasterSlave::_communication).receiveFeedbackMap(_mesh->getCommunicationMap(), 0);    
+  }
+  
+}
+ 
 
 void ProvidedPartition::createOwnerInformation()
 {

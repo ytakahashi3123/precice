@@ -29,6 +29,10 @@ public:
    /// All distribution data structures are set up.
    virtual void compute ();
 
+   /// fills in the communication Map for each rank
+   virtual void communicationMap ();
+
+
 private:
 
    virtual void createOwnerInformation();
@@ -36,6 +40,8 @@ private:
    logging::Logger _log{"partition::ProvidedPartition"};
 
    bool _hasToSend;
+
+   std::vector<int> vertexCounters;
 
 };
 

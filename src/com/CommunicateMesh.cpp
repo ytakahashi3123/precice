@@ -327,5 +327,23 @@ void CommunicateMesh::receiveBoundingBox(
     _communication->receive(bb[d].second, rankSender);
   }
 }
+
+
+void CommunicateMesh:: sendVector(
+    const std::vector<int> &vect,
+      int                            rankReceiver)
+{
+
+  _communication->send(vect, rankReceiver);
+  
+}
+
+void CommunicateMesh::receiveVector(
+      std::vector<int> &vect,
+      int                      rankSender)
+{
+   _communication->receive(vect, rankSender);
+}
+
 } // namespace com
 } // namespace precice

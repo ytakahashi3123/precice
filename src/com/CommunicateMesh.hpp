@@ -40,6 +40,14 @@ public:
   void receiveBoundingBox(
       mesh::Mesh::BoundingBox &bb,
       int                      rankSender);
+  
+  void sendVector(
+    const std::vector<int> &vect,
+      int                            rankReceiver);
+
+  void receiveVector(
+      std::vector<int> &vect,
+      int                      rankSender);
 
 private:
   logging::Logger _log{"com::CommunicateMesh"};

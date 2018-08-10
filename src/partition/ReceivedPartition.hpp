@@ -43,6 +43,8 @@ public:
    /// The mesh is re-partitioned and all distribution data structures are set up.
    virtual void compute ();
 
+  std::vector<int> vertexCounters;
+
 private:
 
    void filterMesh(mesh::Mesh& filteredMesh, const bool filterByBB);
@@ -59,6 +61,8 @@ private:
    GeometricFilter _geometricFilter;
 
    mesh::Mesh::BoundingBox _bb;
+
+   mesh::Mesh::FeedbackMap localCommunicationMap;
 
    int _dimensions;
 

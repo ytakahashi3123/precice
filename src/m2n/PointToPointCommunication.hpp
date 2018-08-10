@@ -87,6 +87,18 @@ public:
                        size_t  size,
                        int     valueDimension = 1);
 
+  
+  /**
+   * @brief Sends a mesh partition to remote local ranks.
+   */
+  virtual void sendMesh(const mesh::Mesh &mesh);
+
+  /**
+   * @brief Receives a mesh partition from local remote connected ranks
+   */
+  virtual void receiveMesh(mesh::Mesh &mesh);
+
+
 private:
 
   /// Checks all stored requests for completion and removes associated buffers
