@@ -30,7 +30,7 @@ public:
    virtual void compute ();
 
    /// fills in the communication Map for each rank
-   virtual void communicationMap ();
+   virtual void buildCommunicationMap ();
 
 
 private:

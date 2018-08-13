@@ -39,7 +39,7 @@ void ReceivedPartition::communicate()
   if (not utils::MasterSlave::_slaveMode) {
     assertion ( _mesh->vertices().size() == 0 );
     com::CommunicateMesh(_m2n->getMasterCommunication()).receiveMesh ( *_mesh, 0 );
-    com::CommunicateMesh(_m2n->getMasterCommunication()).receiveVector(vertexCounters, 0);
+    _m2n->getMasterCommunication()->receive(vertexCounters, 0);
   }
 }
 

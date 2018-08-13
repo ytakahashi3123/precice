@@ -35,6 +35,7 @@ void ProvidedPartition::communicate()
     if( not utils::MasterSlave::_slaveMode ){
 
       globalMesh.addMesh(*_mesh); //add local master mesh to global mesh
+      vertexCounters[0]= globalMesh.vertices().size();  
       
     }
 
@@ -50,6 +51,7 @@ void ProvidedPartition::communicate()
 
         for (int rankSlave = 1; rankSlave < utils::MasterSlave::_size; rankSlave++) {
           com::CommunicateMesh(utils::MasterSlave::_communication).receiveMesh ( globalMesh, rankSlave);
+          vertexCounters[rankSlave]= globalMesh.vertices().size(); //     each element shows the maximum vertex ID of the corresponding rank! 
           DEBUG("Received sub-mesh, from slave: " << rankSlave <<", global vertexCount: " << globalMesh.vertices().size());
         }
       }
@@ -72,7 +74,7 @@ void ProvidedPartition::communicate()
     if (not utils::MasterSlave::_slaveMode) {
       CHECK ( globalMesh.vertices().size() > 0, "The provided mesh " << globalMesh.getName() << " is invalid (possibly empty).");
       com::CommunicateMesh(_m2n->getMasterCommunication()).sendMesh ( globalMesh, 0 );
-      com::CommunicateMesh(_m2n->getMasterCommunication()).sendVector(vertexCounters, 0);
+      _m2n->getMasterCommunication()->send(vertexCounters, 0);
     }
     e2.stop();
 
@@ -111,8 +113,6 @@ void ProvidedPartition::compute()
       vertexCounter++;
     }
 
-    vertexCounters[0]=vertexCounter;
-
     for (int rankSlave = 1; rankSlave < utils::MasterSlave::_size; rankSlave++){
       utils::MasterSlave::_communication->receive(numberOfVertices,rankSlave);
       utils::MasterSlave::_communication->send(vertexCounter,rankSlave);
@@ -121,7 +121,7 @@ void ProvidedPartition::compute()
         _mesh->getVertexDistribution()[rankSlave].push_back(vertexCounter);
         vertexCounter++;
       }
-      vertexCounters[rankSlave]=vertexCounter; //each element shows the maximum vertex ID of the corresponding rank!
+
     }
     _mesh->setGlobalNumberOfVertices(vertexCounter);
     utils::MasterSlave::_communication->broadcast(vertexCounter);
@@ -138,7 +138,7 @@ void ProvidedPartition::compute()
   computeVertexOffsets();
 }
 
-void ProvidedPartition::communicationMap()
+void ProvidedPartition::buildCommunicationMap()
 {
 
   if (utils::MasterSlave::_masterMode) {

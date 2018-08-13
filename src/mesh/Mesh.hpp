@@ -291,7 +291,7 @@ public:
    */
   const std::vector<double> getCOG() const;
 
-  std::map<int, std::vector<int>> _localCommunicationMap;
+  CommunicationMap  _localCommunicationMap;
   
 private:
 

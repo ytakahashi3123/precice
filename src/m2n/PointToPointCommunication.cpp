@@ -235,12 +235,12 @@ std::map<int, std::vector<int>> buildCommunicationMap(
 
   localIndexCount = 0;
 
-  std::map<int, std::vector<int>> communicationMap;
+  std::map<int, std::vector<int>> localCommunicationMap;
 
   auto iterator = thisVertexDistribution.find(thisRank);
 
   if (iterator == thisVertexDistribution.end())
-    return communicationMap;
+    return localCommunicationMap;
 
   auto const &indices = iterator->second;
 
@@ -250,7 +250,7 @@ std::map<int, std::vector<int>> buildCommunicationMap(
     for (const auto &other : otherVertexDistribution) {
       for (const auto &otherIndex : other.second) {
         if (thisIndex == otherIndex) {
-          communicationMap[other.first].push_back(index);
+          localCommunicationMap[other.first].push_back(index);
           break;
         }
       }
@@ -265,10 +265,10 @@ std::map<int, std::vector<int>> buildCommunicationMap(
   // instance, this happens a lot in case of unstructured grids on the
   // interface, or because user did a mistake and did not define the interface
   // boundary properly.
-  if (communicationMap.size() > 0)
+  if (localCommunicationMap.size() > 0)
     localIndexCount = indices.size();
 
-  return communicationMap;
+  return localCommunicationMap;
 }
 
 std::string PointToPointCommunication::_prefix;
@@ -371,7 +371,7 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   /*std::map<int, std::vector<int>> communicationMap = m2n::buildCommunicationMap(
     _localIndexCount, vertexDistribution, requesterVertexDistribution);*/
 
-  std::map<int, std::vector<int>> communicationMap = _mesh->getCommunicationMap();
+  std::map<int, std::vector<int>> localCommunicationMap = _mesh->getCommunicationMap();
 
 // Print `communicationMap'.
 #ifdef P2P_LCM_PRINT
@@ -383,8 +383,8 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
 // Print statistics of `communicationMap'.
 #ifdef P2P_LCM_PRINT_STATS
   e.stop(true);
-  printCommunicationPartnerCountStats(communicationMap);
-  printLocalIndexCountStats(communicationMap);
+  printCommunicationPartnerCountStats(localCommunicationMap);
+  printLocalIndexCountStats(localCommunicationMap);
   e.start(true);
 #endif
 
@@ -405,7 +405,7 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   }
 #endif
 
-  if (communicationMap.empty()) {
+  if (localCommunicationMap.empty()) {
     assertion(_localIndexCount == 0);
     _isConnected = true;
     return;
@@ -424,18 +424,18 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   c->acceptConnectionAsServer(
       nameAcceptor + "-" + std::to_string(utils::MasterSlave::_rank),
       nameRequester,
-      communicationMap.size());
+      localCommunicationMap.size());
 
   // assertion(c->getRemoteCommunicatorSize() == communicationMap.size());
 
-  _mappings.reserve(communicationMap.size());
+  _mappings.reserve(localCommunicationMap.size());
 
-  for (size_t localRequesterRank = 0; localRequesterRank < communicationMap.size(); ++localRequesterRank) {
+  for (size_t localRequesterRank = 0; localRequesterRank < localCommunicationMap.size(); ++localRequesterRank) {
     int globalRequesterRank = -1;
 
     c->receive(globalRequesterRank, localRequesterRank);
 
-    auto indices = std::move(communicationMap[globalRequesterRank]);
+    auto indices = std::move(localCommunicationMap[globalRequesterRank]);
     _totalIndexCount += indices.size();
 
     // NOTE:
@@ -510,21 +510,21 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
   //   the remote process with rank 1;
   // - has to communicate (send/receive) data with local indices 0 and 2 with
   //   the remote process with rank 4.
-  std::map<int, std::vector<int>> communicationMap = m2n::buildCommunicationMap(
+  std::map<int, std::vector<int>> localCommunicationMap = m2n::buildCommunicationMap(
       _localIndexCount, vertexDistribution, acceptorVertexDistribution);
 
 // Print `communicationMap'.
 #ifdef P2P_LCM_PRINT
   e.stop(true);
-  print(communicationMap);
+  print(localCommunicationMap);
   e.start(true);
 #endif
 
 // Print statistics of `communicationMap'.
 #ifdef P2P_LCM_PRINT_STATS
   e.stop(true);
-  printCommunicationPartnerCountStats(communicationMap);
-  printLocalIndexCountStats(communicationMap);
+  printCommunicationPartnerCountStats(localCommunicationMap);
+  printLocalIndexCountStats(localCommunicationMap);
   e.start(true);
 #endif
 
@@ -537,7 +537,7 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
   }
 #endif
 
-  if (communicationMap.empty()) {
+  if (localCommunicationMap.empty()) {
     assertion(_localIndexCount == 0);
     _isConnected = true;
     return;
@@ -546,14 +546,14 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
   Publisher::ScopedSetEventNamePrefix ssenp(_prefix + "PointToPointCommunication::requestConnection/request/");
 
   std::vector<com::PtrRequest> requests;
-  requests.reserve(communicationMap.size());
-  _mappings.reserve(communicationMap.size());
+  requests.reserve(localCommunicationMap.size());
+  _mappings.reserve(localCommunicationMap.size());
 
   // Request point-to-point connections (as client) between the current
   // requester process (in the current participant) and (multiple) acceptor
   // processes (in the acceptor participant) with ranks `globalAcceptorRank'
   // according to communication map.
-  for (auto &i : communicationMap) {
+  for (auto &i : localCommunicationMap) {
     auto globalAcceptorRank = i.first;
     auto indices            = std::move(i.second);
 
