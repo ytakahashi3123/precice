@@ -74,6 +74,10 @@ public:
       size_t  size,
       int     valueDimension);
 
+  // defined to avoid abstarct class
+  virtual void sendMesh(const mesh::Mesh &mesh);
+  virtual void receiveMesh(mesh::Mesh &mesh);
+
 private:
   logging::Logger _log{"m2n::GatherScatterCommunication"};
 

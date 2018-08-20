@@ -180,6 +180,20 @@ void M2N::send(double itemToSend)
   }
 }
 
+void M2N::sendMesh(const mesh::Mesh &mesh)
+{
+  int meshID = mesh.getID();
+  if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
+    assertion(_areSlavesConnected);
+    assertion(_distComs.find(meshID) != _distComs.end());
+    assertion(_distComs[meshID].get() != nullptr);
+
+    _distComs[meshID]->sendMesh(mesh);
+  } else { //coupling mode
+  }
+}
+
+
 void M2N::receive(double *itemsToReceive,
                   int     size,
                   int     meshID,
@@ -234,6 +248,21 @@ void M2N::receive(double &itemToReceive)
 
   DEBUG("receive(double): " << itemToReceive);
 }
+
+
+void M2N::receiveMesh(mesh::Mesh &mesh)
+{
+  int meshID = mesh.getID();
+  if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
+    assertion(_areSlavesConnected);
+    assertion(_distComs.find(meshID) != _distComs.end());
+    assertion(_distComs[meshID].get() != nullptr);
+
+    _distComs[meshID]->receiveMesh(mesh);
+  } else { //coupling mode
+  }
+}
+
 
 } // namespace m2n
 } // namespace precice

@@ -2,6 +2,7 @@
 #include <vector>
 #include <thread>
 #include "com/Communication.hpp"
+#include "com/CommunicateMesh.hpp"
 #include "com/CommunicationFactory.hpp"
 #include "mesh/Edge.hpp"
 #include "mesh/Mesh.hpp"
@@ -368,10 +369,10 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   //   the remote process with rank 4.
 
 
-  /*std::map<int, std::vector<int>> communicationMap = m2n::buildCommunicationMap(
-    _localIndexCount, vertexDistribution, requesterVertexDistribution);*/
+  std::map<int, std::vector<int>> localCommunicationMap = m2n::buildCommunicationMap(
+    _localIndexCount, vertexDistribution, requesterVertexDistribution);
 
-  std::map<int, std::vector<int>> localCommunicationMap = _mesh->getCommunicationMap();
+/*  std::map<int, std::vector<int>> localCommunicationMap = _mesh->getCommunicationMap();*/ // I will do it late 
 
 // Print `communicationMap'.
 #ifdef P2P_LCM_PRINT
@@ -510,8 +511,10 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
   //   the remote process with rank 1;
   // - has to communicate (send/receive) data with local indices 0 and 2 with
   //   the remote process with rank 4.
-  std::map<int, std::vector<int>> localCommunicationMap = m2n::buildCommunicationMap(
-      _localIndexCount, vertexDistribution, acceptorVertexDistribution);
+ std::map<int, std::vector<int>> localCommunicationMap = m2n::buildCommunicationMap(
+     _localIndexCount, vertexDistribution, acceptorVertexDistribution);
+
+/*    std::map<int, std::vector<int>> localCommunicationMap = _mesh->getCommunicationMap();*/
 
 // Print `communicationMap'.
 #ifdef P2P_LCM_PRINT
@@ -674,6 +677,33 @@ void PointToPointCommunication::receive(double *itemsToReceive,
   _buffer.clear();
 }
 
+void PointToPointCommunication::sendMesh(const mesh::Mesh &mesh)
+{
+
+  if (_mappings.size() == 0) {
+    assertion(_localIndexCount == 0);
+    return;
+  }
+
+  for (auto &mapping : _mappings) {
+    com::CommunicateMesh(mapping.communication).sendMesh(mesh, mapping.localRemoteRank);
+  }  
+}
+
+void PointToPointCommunication::receiveMesh(mesh::Mesh &mesh)
+{
+
+  if (_mappings.size() == 0) {
+    assertion(_localIndexCount == 0);
+    return;
+  }
+
+  for (auto &mapping : _mappings) {
+    com::CommunicateMesh(mapping.communication).receiveMesh(mesh, mapping.localRemoteRank);
+  }  
+}
+
+
 void PointToPointCommunication::checkBufferedRequests(bool blocking)
 {
   do {
@@ -689,159 +719,6 @@ void PointToPointCommunication::checkBufferedRequests(bool blocking)
       std::this_thread::yield(); // give up our time slice, so MPI way work
   } while (blocking);
 }
-
-
-
-void PointToPointCommunication::sendMesh(const mesh::Mesh &mesh)
-{
-  for (auto &mapping : _mappings) {
-
-    int dim = mesh.getDimensions();    
-
-  int numberOfVertices = mesh.vertices().size();
-  mapping.communication->send(numberOfVertices, mapping.localRemoteRank);
-  if (not mesh.vertices().empty()) {
-    std::vector<double> coords(numberOfVertices * dim);
-    std::vector<int> globalIDs(numberOfVertices);
-    for (int i = 0; i < numberOfVertices; i++) {
-      for (int d = 0; d < dim; d++) {
-        coords[i * dim + d] = mesh.vertices()[i].getCoords()[d];
-      }
-      globalIDs[i] = mesh.vertices()[i].getGlobalIndex();
-    }
-    mapping.communication->send(coords, mapping.localRemoteRank);
-    mapping.communication->send(globalIDs, mapping.localRemoteRank);
-  }
-
-  int numberOfEdges = mesh.edges().size();
-  mapping.communication->send(numberOfEdges, mapping.localRemoteRank);
-  if (not mesh.edges().empty()) {
-    //we need to send the vertexIDs first such that the right edges can be created later
-    //contrary to the normal sendMesh, this variant must also work for adding delta meshes
-    std::vector<int> vertexIDs(numberOfVertices);
-    for (int i = 0; i < numberOfVertices; i++) {
-      vertexIDs[i] = mesh.vertices()[i].getID();
-    }
-    mapping.communication->send(vertexIDs, mapping.localRemoteRank);
-
-    std::vector<int> edgeIDs(numberOfEdges * 2);
-    for (int i = 0; i < numberOfEdges; i++) {
-      edgeIDs[i * 2]     = mesh.edges()[i].vertex(0).getID();
-      edgeIDs[i * 2 + 1] = mesh.edges()[i].vertex(1).getID();
-    }
-    mapping.communication->send(edgeIDs, mapping.localRemoteRank);
-  }
-
-  if (dim == 3) {
-    int numberOfTriangles = mesh.triangles().size();
-    mapping.communication->send(numberOfTriangles, mapping.localRemoteRank);
-    if (not mesh.triangles().empty()) {
-      //we need to send the edgeIDs first such that the right edges can be created later
-      //contrary to the normal sendMesh, this variant must also work for adding delta meshes
-      std::vector<int> edgeIDs(numberOfEdges);
-      for (int i = 0; i < numberOfEdges; i++) {
-        edgeIDs[i] = mesh.edges()[i].getID();
-      }
-      mapping.communication->send(edgeIDs, mapping.localRemoteRank);
-
-      std::vector<int> triangleIDs(numberOfTriangles * 3);
-      for (int i = 0; i < numberOfTriangles; i++) {
-        triangleIDs[i * 3]     = mesh.triangles()[i].edge(0).getID();
-        triangleIDs[i * 3 + 1] = mesh.triangles()[i].edge(1).getID();
-        triangleIDs[i * 3 + 2] = mesh.triangles()[i].edge(2).getID();
-      }
-      mapping.communication->send(triangleIDs, mapping.localRemoteRank);
-    }
-  }
-  }
-}
-
-void PointToPointCommunication::receiveMesh(mesh::Mesh &mesh)
-{
- 
-  int dim = mesh.getDimensions();
-
-  for (auto &mapping : _mappings) {
-    
-  std::vector<mesh::Vertex *>   vertices;
-  std::map<int, mesh::Vertex *> vertexMap;
-  int                           numberOfVertices = 0;
-  mapping.communication->receive(numberOfVertices, mapping.localRemoteRank);
-  DEBUG("Number of vertices to receive: " << numberOfVertices);
-
-  if (numberOfVertices > 0) {
-    std::vector<double> vertexCoords;
-    std::vector<int> globalIDs;
-    mapping.communication->receive(vertexCoords, mapping.localRemoteRank);
-    mapping.communication->receive(globalIDs, mapping.localRemoteRank);
-    for (int i = 0; i < numberOfVertices; i++) {
-      Eigen::VectorXd coords(dim);
-      for (int d = 0; d < dim; d++) {
-        coords[d] = vertexCoords[i * dim + d];
-      }
-      mesh::Vertex &v = mesh.createVertex(coords);
-      assertion(v.getID() >= 0, v.getID());
-      v.setGlobalIndex(globalIDs[i]);
-      vertices.push_back(&v);
-    }
-  }
-
-  int                       numberOfEdges = 0;
-  std::vector<mesh::Edge *> edges;
-  mapping.communication->receive(numberOfEdges, mapping.localRemoteRank);
-  DEBUG("Number of edges to receive: " << numberOfEdges);
-  if (numberOfEdges > 0) {
-    std::vector<int> vertexIDs;
-    mapping.communication->receive(vertexIDs, mapping.localRemoteRank);
-    for (int i = 0; i < numberOfVertices; i++) {
-      vertexMap[vertexIDs[i]] = vertices[i];
-    }
-
-    std::vector<int> edgeIDs;
-    mapping.communication->receive(edgeIDs, mapping.localRemoteRank);
-    for (int i = 0; i < numberOfEdges; i++) {
-      assertion(vertexMap.find(edgeIDs[i * 2]) != vertexMap.end());
-      assertion(vertexMap.find(edgeIDs[i * 2 + 1]) != vertexMap.end());
-      assertion(edgeIDs[i * 2] != edgeIDs[i * 2 + 1]);
-      mesh::Edge &e = mesh.createEdge(*vertexMap[edgeIDs[i * 2]], *vertexMap[edgeIDs[i * 2 + 1]]);
-      edges.push_back(&e);
-    }
-  }
-
-  if (dim == 3) {
-    int numberOfTriangles = 0;
-    mapping.communication->receive(numberOfTriangles, mapping.localRemoteRank);
-    DEBUG("Number of Triangles to receive: " << numberOfTriangles);
-    DEBUG("Number of Edges: " << edges.size());
-    if (numberOfTriangles > 0) {
-      assertion((edges.size() > 0) || (numberOfTriangles == 0));
-      std::vector<int> edgeIDs;
-      mapping.communication->receive(edgeIDs, mapping.localRemoteRank);
-      std::map<int, mesh::Edge *> edgeMap;
-      for (int i = 0; i < numberOfEdges; i++) {
-        edgeMap[edgeIDs[i]] = edges[i];
-      }
-
-      std::vector<int> triangleIDs;
-      mapping.communication->receive(triangleIDs, mapping.localRemoteRank);
-
-      for (int i = 0; i < numberOfTriangles; i++) {
-        assertion(edgeMap.find(triangleIDs[i * 3]) != edgeMap.end());
-        assertion(edgeMap.find(triangleIDs[i * 3 + 1]) != edgeMap.end());
-        assertion(edgeMap.find(triangleIDs[i * 3 + 2]) != edgeMap.end());
-        assertion(triangleIDs[i * 3] != triangleIDs[i * 3 + 1]);
-        assertion(triangleIDs[i * 3 + 1] != triangleIDs[i * 3 + 2]);
-        assertion(triangleIDs[i * 3 + 2] != triangleIDs[i * 3]);
-        mesh.createTriangle(*edgeMap[triangleIDs[i * 3]], *edgeMap[triangleIDs[i * 3 + 1]], *edgeMap[triangleIDs[i * 3 + 2]]);
-      }
-    }
-  }
-  }
-}
-
-
-
-
 
 } // namespace m2n
 } // namespace precice

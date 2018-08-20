@@ -81,6 +81,10 @@ public:
       double *itemsToReceive,
       size_t  size,
       int     valueDimension) = 0;
+  /// All ranks Send their partition to remote local ranks.
+  virtual void sendMesh(const mesh::Mesh &mesh)=0;
+  /// All ranks receive mesh partition from remote local ranks.
+  virtual void receiveMesh(mesh::Mesh &mesh)=0;
 
 protected:
   /**

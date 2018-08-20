@@ -5,6 +5,7 @@
 #include "logging/Logger.hpp"
 #include "mesh/SharedPointer.hpp"
 #include <map>
+#include "mesh/Mesh.hpp"
 
 namespace precice
 {
@@ -95,6 +96,8 @@ public:
    */
   void send(double itemToSend);
 
+  void sendMesh(const mesh::Mesh &mesh);
+
   /// All slaves receive an array of doubles (different for each slave).
   void receive(double *itemsToReceive,
                int     size,
@@ -106,6 +109,8 @@ public:
 
   /// All slaves receive a double (the same for each slave).
   void receive(double &itemToReceive);
+
+  void receiveMesh(mesh::Mesh &mesh);
 
 private:
   logging::Logger _log{"m2n::M2N"};

@@ -174,5 +174,11 @@ void GatherScatterCommunication::receive(
   } //master
 }
 
+void GatherScatterCommunication::sendMesh(const mesh::Mesh &mesh)
+{}
+void GatherScatterCommunication::receiveMesh(mesh::Mesh &mesh)
+{}
+
+
 } // namespace m2n
 } // namespace precice
