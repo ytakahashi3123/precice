@@ -79,7 +79,7 @@ void ReceivedPartition::compute()
 
   // (1) Bounding-Box-Filter
 
-  if(_geometricFilter == FILTER_FIRST){ //pre-filter-post-filter
+  if(_geometricFilter == FILTER_FIRST) { //pre-filter-post-filter
 
     INFO("Pre-filter mesh " << _mesh->getName() << " by bounding-box");
     Event e("pre-filter mesh by bounding box");
@@ -154,7 +154,7 @@ void ReceivedPartition::compute()
 
     e1.stop();
 
-    if(_geometricFilter == BROADCAST_FILTER){
+    if(_geometricFilter == BROADCAST_FILTER) {
 
       INFO("Filter mesh " << _mesh->getName() << " by bounding-box");
       Event e2("filter mesh by bounding box");

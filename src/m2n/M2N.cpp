@@ -180,7 +180,7 @@ void M2N::send(double itemToSend)
   }
 }
 
-void M2N::sendMesh(const mesh::Mesh &mesh)
+void M2N::sendMesh(mesh::Mesh &mesh)
 {
   int meshID = mesh.getID();
   if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
@@ -193,6 +193,15 @@ void M2N::sendMesh(const mesh::Mesh &mesh)
   }
 }
 
+void M2N::sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap, mesh::Mesh &mesh)
+{ 
+  if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
+    int meshID = mesh.getID();
+    assertion(_areSlavesConnected);
+    _distComs[meshID]->sendCommunicationMap(localCommunicationMap);
+  } else { //coupling mode
+  }
+}
 
 void M2N::receive(double *itemsToReceive,
                   int     size,
@@ -259,6 +268,16 @@ void M2N::receiveMesh(mesh::Mesh &mesh)
     assertion(_distComs[meshID].get() != nullptr);
 
     _distComs[meshID]->receiveMesh(mesh);
+  } else { //coupling mode
+  }
+}
+
+void M2N::receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap, mesh::Mesh &mesh)
+{
+  if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
+    int meshID = mesh.getID();
+    assertion(_areSlavesConnected);
+    _distComs[meshID]->receiveCommunicationMap(localCommunicationMap);
   } else { //coupling mode
   }
 }

@@ -3,6 +3,7 @@
 #include "DistributedCommunication.hpp"
 #include "com/SharedPointer.hpp"
 #include "logging/Logger.hpp"
+#include "mesh/Mesh.hpp"
 
 namespace precice
 {
@@ -75,8 +76,13 @@ public:
       int     valueDimension);
 
   // defined to avoid abstarct class
-  virtual void sendMesh(const mesh::Mesh &mesh);
+  virtual void sendMesh(mesh::Mesh &mesh);
   virtual void receiveMesh(mesh::Mesh &mesh);
+
+  virtual void sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap);
+  virtual void receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap);
+
+  
 
 private:
   logging::Logger _log{"m2n::GatherScatterCommunication"};

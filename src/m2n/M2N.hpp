@@ -95,8 +95,7 @@ public:
    * neglect the gathering and checking step.
    */
   void send(double itemToSend);
-
-  void sendMesh(const mesh::Mesh &mesh);
+  void sendMesh(mesh::Mesh &mesh);
 
   /// All slaves receive an array of doubles (different for each slave).
   void receive(double *itemsToReceive,
@@ -111,6 +110,8 @@ public:
   void receive(double &itemToReceive);
 
   void receiveMesh(mesh::Mesh &mesh);
+  void receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap, mesh::Mesh &mesh);
+  void sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap, mesh::Mesh &mesh);
 
 private:
   logging::Logger _log{"m2n::M2N"};

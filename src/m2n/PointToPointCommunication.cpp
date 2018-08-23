@@ -677,8 +677,10 @@ void PointToPointCommunication::receive(double *itemsToReceive,
   _buffer.clear();
 }
 
-void PointToPointCommunication::sendMesh(const mesh::Mesh &mesh)
+void PointToPointCommunication::sendMesh(mesh::Mesh &mesh)
 {
+  mesh::Mesh fakemesh(_mesh->getName(), _mesh->getDimensions(), _mesh->isFlipNormals());
+  mesh::PtrMesh fakemesh2;
 
   if (_mappings.size() == 0) {
     assertion(_localIndexCount == 0);
@@ -701,6 +703,20 @@ void PointToPointCommunication::receiveMesh(mesh::Mesh &mesh)
   for (auto &mapping : _mappings) {
     com::CommunicateMesh(mapping.communication).receiveMesh(mesh, mapping.localRemoteRank);
   }  
+}
+
+void PointToPointCommunication::sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
+{
+  for (auto &mapping : _mappings) {
+    mapping.communication->send(localCommunicationMap[mapping.localRemoteRank], mapping.localRemoteRank);
+  }
+}
+
+void PointToPointCommunication::receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
+{
+  for (auto &mapping : _mappings) {
+    mapping.communication->receive(localCommunicationMap[mapping.localRemoteRank], mapping.localRemoteRank);
+  }
 }
 
 

@@ -174,10 +174,16 @@ void GatherScatterCommunication::receive(
   } //master
 }
 
-void GatherScatterCommunication::sendMesh(const mesh::Mesh &mesh)
+void GatherScatterCommunication::sendMesh(mesh::Mesh &mesh)
 {}
 void GatherScatterCommunication::receiveMesh(mesh::Mesh &mesh)
 {}
+
+void GatherScatterCommunication::sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
+{}
+void GatherScatterCommunication::receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
+{}
+
 
 
 } // namespace m2n

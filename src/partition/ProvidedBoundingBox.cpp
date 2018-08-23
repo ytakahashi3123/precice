@@ -1,5 +1,6 @@
 #include "partition/ProvidedBoundingBox.hpp"
 #include "com/CommunicateBoundingBox.hpp"
+#include "com/CommunicateMesh.hpp"
 #include "com/Communication.hpp"
 #include "utils/MasterSlave.hpp"
 #include "m2n/M2N.hpp"
@@ -153,13 +154,16 @@ void ProvidedBoundingBox::compute()
 
 void ProvidedBoundingBox::communicatePartition()
 {
-   _m2n->sendMesh(_mesh);
-//  _m2n->test();
-  
+  if (utils::MasterSlave::_masterMode)
+  {
+   _m2n->getMasterCommunication()->send(vertexCounters, 0);  
+  }
+  _m2n->sendMesh(*_mesh);
 }
 
 void ProvidedBoundingBox::computePartition()
 {
+  _m2n->receiveCommunicationMap(_mesh->getCommunicationMap(), *_mesh);
 }
 
 void ProvidedBoundingBox::createOwnerInformation()

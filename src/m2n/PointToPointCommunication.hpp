@@ -5,6 +5,7 @@
 #include "com/SharedPointer.hpp"
 #include "logging/Logger.hpp"
 #include "mesh/SharedPointer.hpp"
+#include "mesh/Mesh.hpp"
 
 namespace precice
 {
@@ -91,12 +92,21 @@ public:
   /**
    * @brief Sends a mesh partition to remote local ranks.
    */
-  virtual void sendMesh(const mesh::Mesh &mesh);
+  virtual void sendMesh(mesh::Mesh &mesh);
 
   /**
    * @brief Receives a mesh partition from local remote connected ranks
    */
   virtual void receiveMesh(mesh::Mesh &mesh);
+
+
+  virtual void sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap);
+
+  /**
+   * @brief Receives a mesh partition from local remote connected ranks
+   */
+  virtual void receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap);
+
 
 
 private:

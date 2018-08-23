@@ -5,7 +5,6 @@
 #include "mesh/SharedPointer.hpp"
 #include "m2n/SharedPointer.hpp"
 
-
 // ----------------------------------------------------------- CLASS DEFINITION
 
 namespace precice {
