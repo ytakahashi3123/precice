@@ -28,7 +28,6 @@ ReceivedBoundingBox::ReceivedBoundingBox
   mesh::PtrMesh mesh, double safetyFactor, GeometricFilter geometricFilter)
 :
   Partition (mesh),
-  /* _bb(mesh->getDimensions(), std::make_pair(std::numeric_limits<double>::max(), std::numeric_limits<double>::lowest())),*/
   _bb(mesh->getBoundingBox()),
   _dimensions(mesh->getDimensions()),
   _safetyFactor(safetyFactor),
@@ -39,8 +38,14 @@ void ReceivedBoundingBox::communicate()
 {
   TRACE();
   Event e("receive global bounding box");  
-  if (not utils::MasterSlave::_slaveMode) {     
-  com::CommunicateBoundingBox(_m2n->getMasterCommunication()).receiveBoundingBoxMap(_globalBB, 0 );
+  if (not utils::MasterSlave::_slaveMode) {
+    remoteParComSize=0;
+    _m2n->getMasterCommunication()->receive(remoteParComSize, 0);
+    for (int remoteRank = 0; remoteRank < remoteParComSize; remoteRank++ ) {
+      _globalBB[remoteRank]= _bb;
+    }
+    
+    com::CommunicateBoundingBox(_m2n->getMasterCommunication()).receiveBoundingBoxMap(_globalBB, 0 );
   }
 }
 
@@ -57,21 +62,28 @@ void ReceivedBoundingBox::compute()
 
     if (utils::MasterSlave::_slaveMode)
     {
-      mesh::Mesh::BoundingBoxMap received_globalBB;
-      com::CommunicateBoundingBox(utils::MasterSlave::_communication).broadcastReceiveBoundingBoxMap(received_globalBB);
+      utils::MasterSlave::_communication->broadcast(remoteParComSize, 0);
+
+      // initializing the _globalBB
+      for (int remoteRank = 0; remoteRank < remoteParComSize; remoteRank++ ) {
+      _globalBB[remoteRank]= _bb;
+      }
+      // receive _globalBB from master
+      com::CommunicateBoundingBox(utils::MasterSlave::_communication).broadcastReceiveBoundingBoxMap(_globalBB);
       numberOfVertices = _mesh->vertices().size();
       prepareBoundingBox();
-      feedback.push_back(-1);
 
+      feedback.push_back(-1);
+      int i=0;
       if (numberOfVertices>0) {
-        for (auto &other_rank: received_globalBB)
+        for (auto &other_rank: _globalBB)
         {
           if (CompareBoundingBox(_bb,other_rank.second)) {
-            feedback.push_back(other_rank.first);
+            feedback[i]=other_rank.first;
+            i++;
           }
         }
-      }
- 
+      } 
 
      //send feedback to master
      utils::MasterSlave::_communication->send(feedback, 0);
@@ -81,19 +93,24 @@ void ReceivedBoundingBox::compute()
     { // Master
 
       assertion(utils::MasterSlave::_rank==0);
-      assertion(utils::MasterSlave::_size>1);       
+      assertion(utils::MasterSlave::_size>1);
+      _m2n->getMasterCommunication()->send(utils::MasterSlave::_size , 0);
+      utils::MasterSlave::_communication->broadcast(remoteParComSize);
       com::CommunicateBoundingBox(utils::MasterSlave::_communication).broadcastSendBoundingBoxMap(_globalBB);
       numberOfVertices = _mesh->vertices().size();
 
       prepareBoundingBox();
-      feedbackMap[0].push_back(-1);
+      feedback.push_back(-1);
+      int i=0;
       if (numberOfVertices>0) {           
         for (auto &other_rank: _globalBB)
         {
           if (CompareBoundingBox(_bb,other_rank.second)) {
-            feedbackMap[0].push_back(other_rank.first);
-          }
+            feedback[i]=other_rank.first;
+            i++;
+          }          
         }
+        feedbackMap[0]=feedback;
       }
       
       for (int rank_slave=1; rank_slave < utils::MasterSlave::_size ; rank_slave++) {     
@@ -101,7 +118,7 @@ void ReceivedBoundingBox::compute()
         feedbackMap[rank_slave]=feedback;        
       }
 
-      com::CommunicateBoundingBox(_m2n->getMasterCommunication()).sendFeedbackMap(feedbackMap, 0 ); // @Amin: create this method!
+      com::CommunicateBoundingBox(_m2n->getMasterCommunication()).sendFeedbackMap(feedbackMap, 0 ); 
 
       
     }
@@ -204,7 +221,7 @@ void ReceivedBoundingBox::computePartition()
     }
   }
 
-  int remoteParComSize = vertexCounters.size();// number of other particpants ranks
+  remoteParComSize = vertexCounters.size();// number of other particpants ranks
 
   // This nested loop creats a fill in the localCommunicationbMap which shows this local rank needs which vertices from which rank of the other particpant
   for (auto &remoteVertex : vertexIDs) {

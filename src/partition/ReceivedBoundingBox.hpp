@@ -18,7 +18,8 @@ struct TestReceivedBoundingBox3D;
 
 namespace PartitionTests {
 namespace ProvidedBoundingBoxTests {
-struct TestProvidedBoundingBox;
+struct TestProvidedBoundingBox2D;
+struct TestProvidedBoundingBox3D;
 }
 }
 
@@ -57,8 +58,10 @@ public:
   virtual void computePartition();  
   friend struct PartitionTests::ReceivedBoundingBoxTests::TestReceivedBoundingBox2D;
   friend struct PartitionTests::ReceivedBoundingBoxTests::TestReceivedBoundingBox3D;
-  friend struct PartitionTests::ProvidedBoundingBoxTests::TestProvidedBoundingBox;
+  friend struct PartitionTests::ProvidedBoundingBoxTests::TestProvidedBoundingBox2D;
+  friend struct PartitionTests::ProvidedBoundingBoxTests::TestProvidedBoundingBox3D;
 
+  
 private:
 
   
@@ -74,7 +77,9 @@ private:
 
   /// Helper function for 'createOwnerFunction' to set local owner information
   void setOwnerInformation(const std::vector<int> &ownerVec);
- 
+
+  int remoteParComSize;
+  
   mesh::Mesh::BoundingBoxMap _globalBB;
   mesh::Mesh::BoundingBox _bb;
   std::vector<int> feedback; 

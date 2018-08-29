@@ -8,7 +8,9 @@
 
 namespace PartitionTests {
 namespace ProvidedBoundingBoxTests {
-struct TestProvidedBoundingBox;
+struct TestProvidedBoundingBox2D;
+struct TestProvidedBoundingBox3D;
+struct TestInitialCommunicationMap;
 }
 }
 
@@ -46,7 +48,9 @@ public:
   virtual void compute();
   virtual void communicatePartition();
   virtual void computePartition();  
-  friend struct PartitionTests::ProvidedBoundingBoxTests::TestProvidedBoundingBox;
+  friend struct PartitionTests::ProvidedBoundingBoxTests::TestProvidedBoundingBox2D;
+  friend struct PartitionTests::ProvidedBoundingBoxTests::TestProvidedBoundingBox3D;
+  friend struct PartitionTests::ProvidedBoundingBoxTests::TestInitialCommunicationMap;
   friend struct PartitionTests::ReceivedBoundingBoxTests::TestReceivedBoundingBox2D;
   friend struct PartitionTests::ReceivedBoundingBoxTests::TestReceivedBoundingBox3D;
   
@@ -63,6 +67,7 @@ private:
   std::vector<int> connected_ranks;
   double _safetyFactor;
   std::vector<int> vertexCounters;
+  int remoteParComSize;
   
 };
 
