@@ -5,6 +5,7 @@
 #include "com/SharedPointer.hpp"
 #include "logging/Logger.hpp"
 #include "mesh/SharedPointer.hpp"
+#include "mesh/Mesh.hpp"
 
 namespace precice
 {
@@ -23,6 +24,21 @@ namespace m2n
  */
 class PointToPointCommunication : public DistributedCommunication
 {
+public:
+  struct ScopedSetEventNamePrefix {
+    explicit ScopedSetEventNamePrefix(std::string const &prefix);
+
+    ~ScopedSetEventNamePrefix();
+
+  private:
+    std::string _prefix;
+  };
+
+public:
+  static void setEventNamePrefix(std::string const &prefix);
+
+  static std::string const &eventNamePrefix();
+
 public:
   PointToPointCommunication(com::PtrCommunicationFactory communicationFactory,
                             mesh::PtrMesh                mesh);
@@ -51,6 +67,14 @@ public:
   virtual void requestConnection(std::string const &nameAcceptor,
                                  std::string const &nameRequester);
 
+
+  // same as previous accept/requestconnection except thes ones only create channels! No vertex list is needed!
+/*  virtual void acceptPreConnection(std::string const &nameAcceptor,
+                                std::string const &nameRequester);
+  
+  virtual void requestPreConnection(std::string const &nameAcceptor,
+                                 std::string const &nameRequester);
+*/
   /**
    * @brief Disconnects from communication space, i.e. participant.
    *
@@ -72,6 +96,30 @@ public:
                        size_t  size,
                        int     valueDimension = 1);
 
+  
+  /**
+   * @brief Sends a mesh partition to remote local ranks.
+   */
+  virtual void sendMesh(mesh::Mesh &mesh);
+
+  /**
+   * @brief Receives a mesh partition from local remote connected ranks
+   */
+  virtual void receiveMesh(mesh::Mesh &mesh);
+
+
+  virtual void sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap);
+
+  /**
+   * @brief Receives a mesh partition from local remote connected ranks
+   */
+  virtual void receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap);
+
+  std::map<int, std::vector<int>> _localCommunicationMap;
+
+
+
+
 private:
 
   /// Checks all stored requests for completion and removes associated buffers
@@ -81,6 +129,8 @@ private:
   void checkBufferedRequests(bool blocking);
   
   logging::Logger _log{"m2n::PointToPointCommunication"};
+
+  static std::string _prefix;
 
   com::PtrCommunicationFactory _communicationFactory;
 
@@ -113,7 +163,7 @@ private:
 
   size_t _localIndexCount = 0;
 
-  size_t _totalIndexCount = 0;
+  size_t _totalIndexCount = 0; 
 
   bool _isConnected = false;
 

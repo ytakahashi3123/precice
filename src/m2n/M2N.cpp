@@ -1,3 +1,4 @@
+#
 #include "M2N.hpp"
 #include "DistributedComFactory.hpp"
 #include "DistributedCommunication.hpp"
@@ -12,8 +13,8 @@ using precice::utils::Publisher;
 
 namespace precice
 {
+
 extern bool testMode;
-extern bool syncMode;
 
 namespace m2n
 {
@@ -42,7 +43,7 @@ void M2N::acceptMasterConnection(
 {
   TRACE(nameAcceptor, nameRequester);
 
-  Event e("m2n.acceptMasterConnection");
+  //Event e("M2N::acceptMasterConnection");
 
   if (not utils::MasterSlave::_slaveMode) {
     assertion(_masterCom.use_count() > 0);
@@ -59,12 +60,12 @@ void M2N::requestMasterConnection(
 {
   TRACE(nameAcceptor, nameRequester);
 
-  Event e("m2n.requestMasterConnection");
-
   if (not utils::MasterSlave::_slaveMode) {
     assertion(_masterCom.use_count() > 0);
 
-    utils::ScopedEventPrefix sep("M2N::requestMasterConnection/");
+    Publisher::ScopedSetEventNamePrefix ssenp(
+        "M2N::requestMasterConnection"
+        "/");
 
     _masterCom->requestConnection(nameAcceptor, nameRequester, 0, 1);
     _isMasterConnected = _masterCom->isConnected();
@@ -78,9 +79,6 @@ void M2N::acceptSlavesConnection(
     const std::string &nameRequester)
 {
   TRACE(nameAcceptor, nameRequester);
-
-  Event e("m2n.acceptSlavesConnection");
-
   _areSlavesConnected = true;
   for (const auto &pair : _distComs) {
     pair.second->acceptConnection(nameAcceptor, nameRequester);
@@ -94,14 +92,37 @@ void M2N::requestSlavesConnection(
     const std::string &nameRequester)
 {
   TRACE(nameAcceptor, nameRequester);
-
-  Event e("m2n.requestSlavesConnection");
-
   _areSlavesConnected = true;
   for (const auto &pair : _distComs) {
     pair.second->requestConnection(nameAcceptor, nameRequester);
     _areSlavesConnected = _areSlavesConnected && pair.second->isConnected();
   }
+  assertion(_areSlavesConnected);
+}
+
+void M2N::acceptSlavesPreConnection(
+    const std::string &nameAcceptor,
+    const std::string &nameRequester)
+{
+  TRACE(nameAcceptor, nameRequester);
+  _areSlavesConnected = true;
+  for (const auto &pair : _distComs) {
+    pair.second->acceptConnection(nameAcceptor, nameRequester);
+    _areSlavesConnected = _areSlavesConnected && pair.second->isConnected();
+    }
+  assertion(_areSlavesConnected);
+}
+
+void M2N::requestSlavesPreConnection(
+    const std::string &nameAcceptor,
+    const std::string &nameRequester)
+{
+  TRACE(nameAcceptor, nameRequester);
+  _areSlavesConnected = true;
+  for (const auto &pair : _distComs) {
+    pair.second->requestConnection(nameAcceptor, nameRequester);
+    _areSlavesConnected = _areSlavesConnected && pair.second->isConnected();
+    }
   assertion(_areSlavesConnected);
 }
 
@@ -128,7 +149,7 @@ void M2N::closeConnection()
 com::PtrCommunication M2N::getMasterCommunication()
 {
   assertion(not utils::MasterSlave::_slaveMode);
-  return _masterCom; /// @todo maybe it would be a nicer design to not offer this
+  return _masterCom; //TODO maybe it would be a nicer design to not offer this
 }
 
 void M2N::createDistributedCommunication(mesh::PtrMesh mesh)
@@ -148,14 +169,19 @@ void M2N::send(
     assertion(_distComs.find(meshID) != _distComs.end());
     assertion(_distComs[meshID].get() != nullptr);
 
-    if (precice::syncMode and not precice::testMode) {
+#ifdef M2N_PRE_SYNCHRONIZE
+    if (not precice::testMode) {
+      //      Event e("M2N::send/synchronize", true);
+
       if (not utils::MasterSlave::_slaveMode) {
-        bool ack = true;
+        bool ack;
+
         _masterCom->send(ack, 0);
         _masterCom->receive(ack, 0);
         _masterCom->send(ack, 0);
       }
     }
+#endif
 
     _distComs[meshID]->send(itemsToSend, size, valueDimension);
   } else { //coupling mode
@@ -180,6 +206,29 @@ void M2N::send(double itemToSend)
   }
 }
 
+void M2N::broadcastSendLocalMesh(mesh::Mesh &mesh)
+{
+  int meshID = mesh.getID();
+  if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
+    // assertion(_areSlavesConnected);
+    // assertion(_distComs.find(meshID) != _distComs.end());
+    // assertion(_distComs[meshID].get() != nullptr);
+
+    _distComs[meshID]->sendMesh(mesh);
+  } else { //coupling mode
+  }
+}
+
+void M2N::sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap, mesh::Mesh &mesh)
+{ 
+  if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
+    int meshID = mesh.getID();
+    assertion(_areSlavesConnected);
+    _distComs[meshID]->sendCommunicationMap(localCommunicationMap);
+  } else { //coupling mode
+  }
+}
+
 void M2N::receive(double *itemsToReceive,
                   int     size,
                   int     meshID,
@@ -190,7 +239,10 @@ void M2N::receive(double *itemsToReceive,
     assertion(_distComs.find(meshID) != _distComs.end());
     assertion(_distComs[meshID].get() != nullptr);
 
-    if (precice::syncMode and not precice::testMode) {
+#ifdef M2N_PRE_SYNCHRONIZE
+    if (not precice::testMode) {
+      //      Event e("M2N::receive/synchronize", true);
+
       if (not utils::MasterSlave::_slaveMode) {
         bool ack;
 
@@ -199,6 +251,7 @@ void M2N::receive(double *itemsToReceive,
         _masterCom->receive(ack, 0);
       }
     }
+#endif
 
     _distComs[meshID]->receive(itemsToReceive, size, valueDimension);
   } else { //coupling mode
@@ -230,6 +283,31 @@ void M2N::receive(double &itemToReceive)
 
   DEBUG("receive(double): " << itemToReceive);
 }
+
+
+void M2N::broadcastReceiveLocalMesh(mesh::Mesh &mesh)
+{
+  int meshID = mesh.getID();
+  if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
+    // assertion(_areSlavesConnected);
+    // assertion(_distComs.find(meshID) != _distComs.end());
+    // assertion(_distComs[meshID].get() != nullptr);
+
+    _distComs[meshID]->receiveMesh(mesh);
+  } else { //coupling mode
+  }
+}
+
+void M2N::receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap, mesh::Mesh &mesh)
+{
+  if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
+    int meshID = mesh.getID();
+    assertion(_areSlavesConnected);
+    _distComs[meshID]->receiveCommunicationMap(localCommunicationMap);
+  } else { //coupling mode
+  }
+}
+
 
 } // namespace m2n
 } // namespace precice

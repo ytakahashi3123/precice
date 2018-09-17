@@ -3,6 +3,7 @@
 #include "DistributedCommunication.hpp"
 #include "com/SharedPointer.hpp"
 #include "logging/Logger.hpp"
+#include "mesh/Mesh.hpp"
 
 namespace precice
 {
@@ -55,6 +56,13 @@ public:
       const std::string &nameAcceptor,
       const std::string &nameRequester);
 
+/*  virtual void acceptPreConnection(std::string const &nameAcceptor,
+                                   std::string const &nameRequester);
+   
+  virtual void requestPreConnection(std::string const &nameAcceptor,
+                                    std::string const &nameRequester);
+*/
+
   /**
    * @brief Disconnects from communication space, i.e. participant.
    *
@@ -73,6 +81,15 @@ public:
       double *itemsToReceive,
       size_t  size,
       int     valueDimension);
+
+  // defined to avoid abstarct class
+  virtual void sendMesh(mesh::Mesh &mesh);
+  virtual void receiveMesh(mesh::Mesh &mesh);
+
+  virtual void sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap);
+  virtual void receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap);
+
+  
 
 private:
   logging::Logger _log{"m2n::GatherScatterCommunication"};

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mesh/SharedPointer.hpp"
+#include "mesh/Mesh.hpp"
 
 namespace precice
 {
@@ -63,6 +64,13 @@ public:
       const std::string &nameAcceptor,
       const std::string &nameRequester) = 0;
 
+/*  virtual void acceptPreConnection(std::string const &nameAcceptor,
+                                std::string const &nameRequester) = 0;
+  
+  virtual void requestPreConnection(std::string const &nameAcceptor,
+                                 std::string const &nameRequester) =0;
+*/
+  
   /**
    * @brief Disconnects from communication space, i.e. participant.
    *
@@ -81,6 +89,14 @@ public:
       double *itemsToReceive,
       size_t  size,
       int     valueDimension) = 0;
+  /// All ranks Send their partition to remote local ranks.
+  virtual void sendMesh(mesh::Mesh &mesh)=0;
+  /// All ranks receive mesh partition from remote local ranks.
+  virtual void receiveMesh(mesh::Mesh &mesh)=0;
+
+  virtual void sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)=0;
+  virtual void receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)=0 ;
+  
 
 protected:
   /**

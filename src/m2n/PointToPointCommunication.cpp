@@ -2,8 +2,12 @@
 #include <vector>
 #include <thread>
 #include "com/Communication.hpp"
+#include "com/CommunicateMesh.hpp"
 #include "com/CommunicationFactory.hpp"
+#include "mesh/Edge.hpp"
 #include "mesh/Mesh.hpp"
+#include "mesh/Triangle.hpp"
+#include "mesh/Vertex.hpp"
 #include "utils/EventTimings.hpp"
 #include "utils/MasterSlave.hpp"
 #include "utils/Publisher.hpp"
@@ -217,56 +221,31 @@ void printLocalIndexCountStats(std::map<int, std::vector<int>> const &m)
   }
 }
 
-// The approximate complexity of this function is O((number of local data
-// indices for the current rank in `thisVertexDistribution') * (total number of
-// data indices for all ranks in `otherVertexDistribution')).
-std::map<int, std::vector<int>> buildCommunicationMap(
-    // `localIndexCount' is the number of unique local indices for the current rank.
-    size_t &localIndexCount,
-    // `thisVertexDistribution' is input vertex distribution from this participant.
-    mesh::Mesh::VertexDistribution const &thisVertexDistribution,
-    // `otherVertexDistribution' is input vertex distribution from other participant.
-    mesh::Mesh::VertexDistribution const &otherVertexDistribution,
-    int                                    thisRank = utils::MasterSlave::_rank)
+
+std::string PointToPointCommunication::_prefix;
+
+PointToPointCommunication::ScopedSetEventNamePrefix::ScopedSetEventNamePrefix(
+    std::string const &prefix)
+    : _prefix(PointToPointCommunication::eventNamePrefix())
 {
-
-  localIndexCount = 0;
-
-  std::map<int, std::vector<int>> communicationMap;
-
-  auto iterator = thisVertexDistribution.find(thisRank);
-
-  if (iterator == thisVertexDistribution.end())
-    return communicationMap;
-
-  auto const &indices = iterator->second;
-
-  int index = 0;
-
-  for (int thisIndex : indices) {
-    for (const auto &other : otherVertexDistribution) {
-      for (const auto &otherIndex : other.second) {
-        if (thisIndex == otherIndex) {
-          communicationMap[other.first].push_back(index);
-          break;
-        }
-      }
-    }
-    ++index;
-  }
-
-  // CAUTION:
-  // This prevents point-to-point communication from considering those process
-  // ranks, which don't have matching indices in the remote participant
-  // (i.e. are not supposed to have any communication partners at all). For
-  // instance, this happens a lot in case of unstructured grids on the
-  // interface, or because user did a mistake and did not define the interface
-  // boundary properly.
-  if (communicationMap.size() > 0)
-    localIndexCount = indices.size();
-
-  return communicationMap;
+  PointToPointCommunication::setEventNamePrefix(prefix);
 }
+
+PointToPointCommunication::ScopedSetEventNamePrefix::~ScopedSetEventNamePrefix()
+{
+  PointToPointCommunication::setEventNamePrefix(_prefix);
+}
+
+void PointToPointCommunication::setEventNamePrefix(std::string const &prefix)
+{
+  _prefix = prefix;
+}
+
+std::string const &PointToPointCommunication::eventNamePrefix()
+{
+  return _prefix;
+}
+
 
 PointToPointCommunication::PointToPointCommunication(
     com::PtrCommunicationFactory communicationFactory,
@@ -338,8 +317,12 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   //   the remote process with rank 1;
   // - has to communicate (send/receive) data with local indices 0 and 2 with
   //   the remote process with rank 4.
-  std::map<int, std::vector<int>> communicationMap = m2n::buildCommunicationMap(
-      _localIndexCount, vertexDistribution, requesterVertexDistribution);
+
+
+//  _localCommunicationMap = m2n::buildCommunicationMap(
+  //  _localIndexCount, vertexDistribution, requesterVertexDistribution);
+ 
+  _localCommunicationMap = _mesh->getCommunicationMap();  
 
 // Print `communicationMap'.
 #ifdef P2P_LCM_PRINT
@@ -351,8 +334,8 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
 // Print statistics of `communicationMap'.
 #ifdef P2P_LCM_PRINT_STATS
   e.stop(true);
-  printCommunicationPartnerCountStats(communicationMap);
-  printLocalIndexCountStats(communicationMap);
+  printCommunicationPartnerCountStats(localCommunicationMap);
+  printLocalIndexCountStats(localCommunicationMap);
   e.start(true);
 #endif
 
@@ -361,7 +344,7 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
     auto addressDirectory = _communicationFactory->addressDirectory();
 
     if (utils::MasterSlave::_masterMode) {
-      Event e("m2n.createDirectories");
+      Event e(_prefix + "PointToPointCommunication::acceptConnection/createDirectories");
 
       for (int rank = 0; rank < utils::MasterSlave::_size; ++rank) {
         Publisher::createDirectory(addressDirectory + "/" + "." + nameAcceptor + "-" + _mesh->getName() +
@@ -373,7 +356,7 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   }
 #endif
 
-  if (communicationMap.empty()) {
+  if (_localCommunicationMap.empty()) {
     assertion(_localIndexCount == 0);
     _isConnected = true;
     return;
@@ -392,18 +375,19 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   c->acceptConnectionAsServer(
       nameAcceptor + "-" + std::to_string(utils::MasterSlave::_rank),
       nameRequester,
-      communicationMap.size());
+      _localCommunicationMap.size());
 
   // assertion(c->getRemoteCommunicatorSize() == communicationMap.size());
 
-  _mappings.reserve(communicationMap.size());
+  _mappings.clear();
+  _mappings.reserve(_localCommunicationMap.size());
 
-  for (size_t localRequesterRank = 0; localRequesterRank < communicationMap.size(); ++localRequesterRank) {
+  for (size_t localRequesterRank = 0; localRequesterRank < _localCommunicationMap.size(); ++localRequesterRank) {
     int globalRequesterRank = -1;
 
     c->receive(globalRequesterRank, localRequesterRank);
 
-    auto indices = std::move(communicationMap[globalRequesterRank]);
+    auto indices = std::move(_localCommunicationMap[globalRequesterRank]);
     _totalIndexCount += indices.size();
 
     // NOTE:
@@ -423,6 +407,7 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   _isConnected = true;
 }
 
+
 void PointToPointCommunication::requestConnection(std::string const &nameAcceptor,
                                                   std::string const &nameRequester)
 {
@@ -439,6 +424,9 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
     // Establish connection between participants' master processes.
     auto c = _communicationFactory->newCommunication();
     {
+      Publisher::ScopedSetEventNamePrefix ssenp(
+          _prefix + "PointToPointCommunication::requestConnection/synchronize/");
+
       c->requestConnection(nameAcceptor, nameRequester, 0, 1);
     }
 
@@ -475,21 +463,23 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
   //   the remote process with rank 1;
   // - has to communicate (send/receive) data with local indices 0 and 2 with
   //   the remote process with rank 4.
-  std::map<int, std::vector<int>> communicationMap = m2n::buildCommunicationMap(
-      _localIndexCount, vertexDistribution, acceptorVertexDistribution);
+
+//_localCommunicationMap = m2n::buildCommunicationMap(_localIndexCount, vertexDistribution, acceptorVertexDistribution);
+
+_localCommunicationMap = _mesh->getCommunicationMap();
 
 // Print `communicationMap'.
 #ifdef P2P_LCM_PRINT
   e.stop(true);
-  print(communicationMap);
+  print(_localCommunicationMap);
   e.start(true);
 #endif
 
 // Print statistics of `communicationMap'.
 #ifdef P2P_LCM_PRINT_STATS
   e.stop(true);
-  printCommunicationPartnerCountStats(communicationMap);
-  printLocalIndexCountStats(communicationMap);
+  printCommunicationPartnerCountStats(_localCommunicationMap);
+  printLocalIndexCountStats(_localCommunicationMap);
   e.start(true);
 #endif
 
@@ -502,21 +492,24 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
   }
 #endif
 
-  if (communicationMap.empty()) {
+  if (_localCommunicationMap.empty()) {
     assertion(_localIndexCount == 0);
     _isConnected = true;
     return;
   }
 
+  Publisher::ScopedSetEventNamePrefix ssenp(_prefix + "PointToPointCommunication::requestConnection/request/");
+
   std::vector<com::PtrRequest> requests;
-  requests.reserve(communicationMap.size());
-  _mappings.reserve(communicationMap.size());
+  requests.reserve(_localCommunicationMap.size());
+  _mappings.clear();
+  _mappings.reserve(_localCommunicationMap.size());
 
   // Request point-to-point connections (as client) between the current
   // requester process (in the current participant) and (multiple) acceptor
   // processes (in the acceptor participant) with ranks `globalAcceptorRank'
   // according to communication map.
-  for (auto &i : communicationMap) {
+  for (auto &i : _localCommunicationMap) {
     auto globalAcceptorRank = i.first;
     auto indices            = std::move(i.second);
 
@@ -549,6 +542,7 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
   _buffer.reserve(_totalIndexCount * _mesh->getDimensions());
   _isConnected = true;
 }
+
 
 void PointToPointCommunication::closeConnection()
 {
@@ -606,7 +600,7 @@ void PointToPointCommunication::receive(double *itemsToReceive,
     assertion(_localIndexCount == 0);
     return;
   }
-  assertion(size == _localIndexCount * valueDimension, size, _localIndexCount * valueDimension);
+   assertion(size == _localIndexCount * valueDimension, size, _localIndexCount * valueDimension);
 
   std::fill(itemsToReceive, itemsToReceive + size, 0);
 
@@ -637,6 +631,35 @@ void PointToPointCommunication::receive(double *itemsToReceive,
   _buffer.clear();
 }
 
+void PointToPointCommunication::sendMesh(mesh::Mesh &mesh)
+{  
+  for (auto &mapping : _mappings) {
+    com::CommunicateMesh(mapping.communication).sendMesh(mesh, mapping.localRemoteRank);
+  }  
+}
+
+void PointToPointCommunication::receiveMesh(mesh::Mesh &mesh)
+{  
+  for (auto &mapping : _mappings) {
+    com::CommunicateMesh(mapping.communication).receiveMesh(mesh, mapping.localRemoteRank);
+  }  
+}
+
+void PointToPointCommunication::sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
+{
+  for (auto &mapping : _mappings) {
+    mapping.communication->send(localCommunicationMap[mapping.localRemoteRank], mapping.localRemoteRank);
+  }
+}
+
+void PointToPointCommunication::receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
+{
+  for (auto &mapping : _mappings) {
+    mapping.communication->receive(localCommunicationMap[mapping.localRemoteRank], mapping.localRemoteRank);
+  }
+}
+
+
 void PointToPointCommunication::checkBufferedRequests(bool blocking)
 {
   do {
@@ -652,9 +675,6 @@ void PointToPointCommunication::checkBufferedRequests(bool blocking)
       std::this_thread::yield(); // give up our time slice, so MPI way work
   } while (blocking);
 }
-
-
-
 
 } // namespace m2n
 } // namespace precice

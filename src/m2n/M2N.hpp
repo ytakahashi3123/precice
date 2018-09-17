@@ -5,6 +5,7 @@
 #include "logging/Logger.hpp"
 #include "mesh/SharedPointer.hpp"
 #include <map>
+#include "mesh/Mesh.hpp"
 
 namespace precice
 {
@@ -64,6 +65,14 @@ public:
   void requestSlavesConnection(const std::string &nameAcceptor,
                                const std::string &nameRequester);
 
+
+  // Same as previous ones except these functions only create the channels, no vertex list needed!
+  void acceptSlavesPreConnection(const std::string &nameAcceptor,
+                                 const std::string &nameRequester);
+  
+  void requestSlavesPreConnection(const std::string &nameAcceptor,
+                                  const std::string &nameRequester);
+
   /**
    * @brief Disconnects from communication space, i.e. participant.
    *
@@ -94,6 +103,7 @@ public:
    * neglect the gathering and checking step.
    */
   void send(double itemToSend);
+  void broadcastSendLocalMesh(mesh::Mesh &mesh);
 
   /// All slaves receive an array of doubles (different for each slave).
   void receive(double *itemsToReceive,
@@ -106,6 +116,10 @@ public:
 
   /// All slaves receive a double (the same for each slave).
   void receive(double &itemToReceive);
+
+  void broadcastReceiveLocalMesh(mesh::Mesh &mesh);
+  void receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap, mesh::Mesh &mesh);
+  void sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap, mesh::Mesh &mesh);
 
 private:
   logging::Logger _log{"m2n::M2N"};
