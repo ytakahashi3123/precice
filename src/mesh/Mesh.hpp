@@ -49,9 +49,13 @@ public:
   typedef utils::ptr_vector<PropertyContainer>   PropertyContainerContainer;
   typedef std::vector<std::pair<double, double>> BoundingBox;
   typedef std::map<int,BoundingBox>              BoundingBoxMap;
+  typedef std::map<int, std::vector<int>>        FeedbackMap; 
 
   /// A mapping from rank to used (not necessarily owned) vertex IDs
   using VertexDistribution = std::map<int, std::vector<int>>;
+
+  /// A mapping from remote local ranks to the IDs that must be communicated
+  using CommunicationMap = std::map<int, std::vector<int>>;
 
   /// Signal is emitted when the mesh is changed
   boost::signals2::signal<void(Mesh &)> meshChanged;
@@ -241,6 +245,13 @@ public:
     return _vertexDistribution;
   }
 
+  /// Returns a mapping from remote local connected ranks to the corresponding vertex IDs
+  CommunicationMap & getCommunicationMap()
+  {
+    return _communicationMap;
+  }
+
+
   std::vector<int>& getVertexOffsets()
   {
     return _vertexOffsets;
@@ -279,6 +290,8 @@ public:
    * cog =  (max - min) / 2 + min
    */
   const std::vector<double> getCOG() const;
+
+  CommunicationMap  _localCommunicationMap;
   
 private:
 
@@ -321,6 +334,13 @@ private:
    * For slaves, this data structure is empty and should not be used.
    */
   VertexDistribution _vertexDistribution;
+
+  /**
+   * @brief each rank stores list of connected ranks and corresponding vertex IDs here. 
+   * Later in M2N package, this will be used to create communication channels. 
+   */
+  CommunicationMap _communicationMap;
+
 
   /// Holds the index of the last vertex for each slave.
   /**
