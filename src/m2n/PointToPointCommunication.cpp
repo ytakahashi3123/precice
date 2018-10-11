@@ -283,7 +283,7 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
     auto c = _communicationFactory->newCommunication();
 
     c->acceptConnection(nameAcceptor, nameRequester);
-
+  
     int requesterMasterRank;
 
     // Exchange ranks of participants' master processes.
@@ -401,9 +401,10 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
     // duplicate references to the same communication object `c'.
     _mappings.push_back({
         static_cast<int>(localRequesterRank), globalRequesterRank, std::move(indices), c, com::PtrRequest(), 0});
-  }
+ }
 
   _buffer.reserve(_totalIndexCount * _mesh->getDimensions());
+
   _isConnected = true;
 }
 
@@ -424,13 +425,11 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
     // Establish connection between participants' master processes.
     auto c = _communicationFactory->newCommunication();
     {
-      Publisher::ScopedSetEventNamePrefix ssenp(
-          _prefix + "PointToPointCommunication::requestConnection/synchronize/");
-
       c->requestConnection(nameAcceptor, nameRequester, 0, 1);
     }
 
     int acceptorMasterRank;
+  
 
     // Exchange ranks of participants' master processes.
     c->receive(acceptorMasterRank, 0);
@@ -498,8 +497,6 @@ _localCommunicationMap = _mesh->getCommunicationMap();
     return;
   }
 
-  Publisher::ScopedSetEventNamePrefix ssenp(_prefix + "PointToPointCommunication::requestConnection/request/");
-
   std::vector<com::PtrRequest> requests;
   requests.reserve(_localCommunicationMap.size());
   _mappings.clear();
@@ -516,7 +513,7 @@ _localCommunicationMap = _mesh->getCommunicationMap();
     _totalIndexCount += indices.size();
 
     auto c = _communicationFactory->newCommunication();
-
+  
 #ifdef SuperMUC_WORK
     Publisher::ScopedPushDirectory spd("." + nameAcceptor + "-" + _mesh->getName() + "-" +
                                        std::to_string(globalAcceptorRank) + ".address");
@@ -536,10 +533,11 @@ _localCommunicationMap = _mesh->getCommunicationMap();
     // acceptor process (in the acceptor participant).
     _mappings.push_back({
         0, globalAcceptorRank, std::move(indices), c, com::PtrRequest(), 0});
-  }
+ }
 
   com::Request::wait(requests);
   _buffer.reserve(_totalIndexCount * _mesh->getDimensions());
+
   _isConnected = true;
 }
 
@@ -631,6 +629,8 @@ void PointToPointCommunication::receive(double *itemsToReceive,
   _buffer.clear();
 }
 
+//////// Start Test
+
 void PointToPointCommunication::sendMesh(mesh::Mesh &mesh)
 {  
   for (auto &mapping : _mappings) {
@@ -644,6 +644,37 @@ void PointToPointCommunication::receiveMesh(mesh::Mesh &mesh)
     com::CommunicateMesh(mapping.communication).receiveMesh(mesh, mapping.localRemoteRank);
   }  
 }
+
+// void PointToPointCommunication::sendMesh(mesh::PtrMesh mesh)
+// {  
+//   for (auto &mapping : _mappings) {
+//     com::CommunicateMesh(mapping.communication).sendMesh(mesh, mapping.localRemoteRank);
+//   }  
+// }
+
+// void PointToPointCommunication::receiveMesh(mesh::PtrMesh mesh)
+// {  
+//   for (auto &mapping : _mappings) {
+//     com::CommunicateMesh(mapping.communication).receiveMesh(mesh, mapping.localRemoteRank);
+//   }  
+// }
+
+// void PointToPointCommunication::sendMesh(mesh::Mesh mesh)
+// {  
+//   for (auto &mapping : _mappings) {
+//     com::CommunicateMesh(mapping.communication).sendMesh(mesh, mapping.localRemoteRank);
+//   }  
+// }
+
+// void PointToPointCommunication::receiveMesh(mesh::Mesh mesh)
+// {  
+//   for (auto &mapping : _mappings) {
+//     com::CommunicateMesh(mapping.communication).receiveMesh(mesh, mapping.localRemoteRank);
+//   }  
+// }
+
+
+/////// End Test
 
 void PointToPointCommunication::sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
 {

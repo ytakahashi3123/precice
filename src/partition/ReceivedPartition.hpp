@@ -41,6 +41,9 @@ public:
 
   virtual void compute() override;
 
+  virtual void communicateBoundingBox() override;
+  virtual void computeBoundingBox() override;
+
 private:
   /// Create filteredMesh from the filtered _mesh.
   /*

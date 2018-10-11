@@ -58,6 +58,7 @@ public:
   
 
   mesh::Mesh::FeedbackMap  received_feedbackMap;
+  int check_parm;
   
 private:
 

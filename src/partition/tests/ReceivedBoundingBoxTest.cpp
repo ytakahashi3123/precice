@@ -7,10 +7,15 @@
 
 #include "utils/Parallel.hpp"
 #include "com/MPIDirectCommunication.hpp"
+#include "com/SocketCommunication.hpp"
 #include "com/CommunicateBoundingBox.hpp"
 #include "m2n/M2N.hpp"
 #include "utils/MasterSlave.hpp"
 #include "m2n/GatherScatterComFactory.hpp"
+#include "m2n/PointToPointCommunication.hpp"
+#include "mapping/NearestNeighborMapping.hpp"
+#include "mapping/NearestProjectionMapping.hpp"
+#include "mapping/PetRadialBasisFctMapping.hpp"
 #include "mesh/Vertex.hpp"
 #include "mesh/Edge.hpp"
 #include "mesh/Triangle.hpp"
@@ -209,7 +214,7 @@ void createSolidzMesh3D(mesh::PtrMesh pSolidzMesh){
 BOOST_AUTO_TEST_CASE(TestReceivedBoundingBox2D, * testing::OnSize(4))
 {
   com::PtrCommunication participantCom =
-      com::PtrCommunication(new com::MPIDirectCommunication());
+      com::PtrCommunication(new com::SocketCommunication());
   m2n::DistributedComFactory::SharedPointer distrFactory = m2n::DistributedComFactory::SharedPointer(
       new m2n::GatherScatterComFactory(participantCom));
   m2n::PtrM2N m2n = m2n::PtrM2N(new m2n::M2N(participantCom, distrFactory));
@@ -223,27 +228,51 @@ BOOST_AUTO_TEST_CASE(TestReceivedBoundingBox2D, * testing::OnSize(4))
   if (utils::Parallel::getProcessRank() == 0){ //NASTIN
     mesh::PtrMesh pNastinMesh(new mesh::Mesh("NastinMesh", dimensions, flipNormals));    
     double safetyFactor = 0;
+    int remote_size;
     Eigen::VectorXd position(dimensions);
     createNastinMesh2D(pNastinMesh);
     pNastinMesh->computeState();   
     mesh::Mesh::BoundingBoxMap send_globalBB;    
     mesh::Mesh::BoundingBox localBB;
+    mesh::Mesh::FeedbackMap feedbackMap;
 
     //prepare demo golabl boundingbox to send to receiving partition
     for (int i=0; i < 3; i++) {
-      for (int j=0; j < dimensions; j++) {
-        localBB.push_back(std::make_pair(i,i+1));
-      }      
+      for (int j=0; j < 2; j++) {   
+      localBB.push_back(std::make_pair(i,i+1));
+      }
       send_globalBB[i]=localBB;
       localBB.clear();
     }
 
-    m2n->getMasterCommunication()->send(3 , 0);
-    com::CommunicateBoundingBox(m2n->getMasterCommunication()).sendBoundingBoxMap(send_globalBB,0);     
+
+    for (int i=0; i < 3; i++) {
+        std::vector<int> test;
+        test.push_back(-1);
+        feedbackMap[i]=test;
+    }
+
+    std::vector<int> vertexcounters;
+    vertexcounters.push_back(6);
+    int com_size = 3;
+    m2n->getMasterCommunication()->send(com_size , 0);
+    com::CommunicateBoundingBox(m2n->getMasterCommunication()).sendBoundingBoxMap(send_globalBB,0);
+    m2n->getMasterCommunication()->receive(remote_size, 0);
+    com::CommunicateBoundingBox(m2n->getMasterCommunication()).receiveFeedbackMap(feedbackMap,0);
+    for (int i=0; i < com_size; i++) {
+      m2n->getMasterCommunication()->send(i+2, 0);
+    }
   }
 
   else{//SOLIDZ
     mesh::PtrMesh pSolidzMesh(new mesh::Mesh("SolidzMesh", dimensions, flipNormals));
+    mesh::PtrMesh pSolidzMesh_received(new mesh::Mesh("SolidzMesh", dimensions, flipNormals));
+
+    mapping::PtrMapping boundingFromMapping = mapping::PtrMapping(new mapping::NearestNeighborMapping(mapping::Mapping::CONSISTENT, dimensions));
+    mapping::PtrMapping boundingToMapping = mapping::PtrMapping(new mapping::NearestNeighborMapping(mapping::Mapping::CONSERVATIVE, dimensions));
+    boundingFromMapping->setMeshes(pSolidzMesh_received, pSolidzMesh);
+    boundingToMapping->setMeshes(pSolidzMesh, pSolidzMesh_received);
+
 
     if(utils::Parallel::getProcessRank() == 1){//Master
       Eigen::VectorXd position(dimensions);
@@ -279,24 +308,28 @@ BOOST_AUTO_TEST_CASE(TestReceivedBoundingBox2D, * testing::OnSize(4))
     mesh::Mesh::BoundingBoxMap globalBBtoCheck;
     mesh::Mesh::BoundingBox localBB;
       
-    ReceivedBoundingBox part(pSolidzMesh, safetyFactor, ReceivedBoundingBox::FILTER_FIRST);
-    part.setm2n(m2n);
+    ReceivedBoundingBox part(pSolidzMesh_received, safetyFactor, ReceivedBoundingBox::FILTER_FIRST);
+    part.setM2N(m2n);
+    part.setFromMapping(boundingFromMapping);
+    part.setToMapping(boundingToMapping);
     part.communicateBoundingBox();
     part.computeBoundingBox();
     
-    for (int i=0; i < 3; i++) {
-      for (int j=0; j < dimensions; j++) {
+    for (int i=0; i < 3; i++) {    
+      for (int j = 0; j < 2; j++) { 
         localBB.push_back(std::make_pair(i,i+1));
-      }      
+      }
       globalBBtoCheck[i]=localBB;
       localBB.clear();
     }
 
-    BOOST_TEST(part.remoteParComSize==3);
+    // if (utils::Parallel::getProcessRank() == 1){
+       BOOST_TEST(part.remoteParComSize==3);
+    // }
     for (int i=0; i<3 ; i++) {                
       BOOST_TEST(part._globalBB[i] == globalBBtoCheck[i]);
     }
-
+    
     if(utils::Parallel::getProcessRank()==1){      
       BOOST_TEST(part.feedbackMap[0][0]==2);
       BOOST_TEST(part.feedbackMap[1][0]==1);
@@ -308,10 +341,13 @@ BOOST_AUTO_TEST_CASE(TestReceivedBoundingBox2D, * testing::OnSize(4))
       BOOST_TEST(part.feedback.size()==1);
       BOOST_TEST(part.feedback[0]==0);
     }
-    
+   
+
   }
+  
   tearDownParallelEnvironment();
 }
+
 
 BOOST_AUTO_TEST_CASE(TestReceivedBoundingBox3D, * testing::OnSize(4))
 {
@@ -325,12 +361,14 @@ BOOST_AUTO_TEST_CASE(TestReceivedBoundingBox3D, * testing::OnSize(4))
 
   int dimensions = 3;
   bool flipNormals = false;
+  int remote_size=0;
   Eigen::VectorXd offset = Eigen::VectorXd::Zero(dimensions);
 
   if (utils::Parallel::getProcessRank() == 0){ //NASTIN
 
     mesh::Mesh::BoundingBoxMap send_globalBB;    
     mesh::Mesh::BoundingBox localBB;
+    mesh::Mesh::FeedbackMap feedbackMap;
 
     //prepare demo golabl boundingbox to send to receiving partition
     for (int i=0; i < 3; i++) {
@@ -341,12 +379,24 @@ BOOST_AUTO_TEST_CASE(TestReceivedBoundingBox3D, * testing::OnSize(4))
       localBB.clear();
     }
 
-    m2n->getMasterCommunication()->send(3 , 0);
+    int com_size = 3;
+    m2n->getMasterCommunication()-> send(com_size , 0);
     com::CommunicateBoundingBox(m2n->getMasterCommunication()).sendBoundingBoxMap(send_globalBB,0);     
+    m2n->getMasterCommunication()->receive(remote_size, 0);
+    com::CommunicateBoundingBox(m2n->getMasterCommunication()).receiveFeedbackMap(feedbackMap,0);
+    for (int i=0; i < com_size; i++) {
+      m2n->getMasterCommunication()->send(i+2, 0);
+    }
   }
 
   else{//SOLIDZ
     mesh::PtrMesh pSolidzMesh(new mesh::Mesh("SolidzMesh", dimensions, flipNormals));
+    mesh::PtrMesh pSolidzMesh_received(new mesh::Mesh("SolidzMesh", dimensions, flipNormals));
+
+    mapping::PtrMapping boundingFromMapping = mapping::PtrMapping(new mapping::NearestNeighborMapping(mapping::Mapping::CONSISTENT, dimensions));
+    mapping::PtrMapping boundingToMapping = mapping::PtrMapping(new mapping::NearestNeighborMapping(mapping::Mapping::CONSERVATIVE, dimensions));
+    boundingFromMapping->setMeshes(pSolidzMesh_received, pSolidzMesh);
+    boundingToMapping->setMeshes(pSolidzMesh, pSolidzMesh_received);
 
     if(utils::Parallel::getProcessRank() == 1){//Master
       Eigen::VectorXd position(dimensions);
@@ -382,8 +432,10 @@ BOOST_AUTO_TEST_CASE(TestReceivedBoundingBox3D, * testing::OnSize(4))
     mesh::Mesh::BoundingBoxMap globalBBtoCheck;
     mesh::Mesh::BoundingBox localBB;
       
-    ReceivedBoundingBox part(pSolidzMesh, safetyFactor, ReceivedBoundingBox::FILTER_FIRST);
-    part.setm2n(m2n);
+    ReceivedBoundingBox part(pSolidzMesh_received, safetyFactor, ReceivedBoundingBox::FILTER_FIRST);
+    part.setM2N(m2n);
+    part.setFromMapping(boundingFromMapping);
+    part.setToMapping(boundingToMapping);
     part.communicateBoundingBox();
     part.computeBoundingBox();
     
@@ -401,17 +453,43 @@ BOOST_AUTO_TEST_CASE(TestReceivedBoundingBox3D, * testing::OnSize(4))
     }
 
     if(utils::Parallel::getProcessRank()==1){      
+      BOOST_TEST(part._bb[0].first==2.25);
+      BOOST_TEST(part._bb[0].second==2.67);
+      BOOST_TEST(part._bb[1].first==2.1);
+      BOOST_TEST(part._bb[1].second==2.95);
+      BOOST_TEST(part._bb[2].first==2.24);
+      BOOST_TEST(part._bb[2].second==2.65);
+    }else if(utils::Parallel::getProcessRank()==2){      
+      BOOST_TEST(part._bb[0].first==1.3);
+      BOOST_TEST(part._bb[0].second==1.65);
+      BOOST_TEST(part._bb[1].first==1.5);
+      BOOST_TEST(part._bb[1].second==1.52);
+      BOOST_TEST(part._bb[2].first==1.7);
+      BOOST_TEST(part._bb[2].second==1.95);
+    }else if(utils::Parallel::getProcessRank()==3){      
+      BOOST_TEST(part._bb[0].first==0.2);
+      BOOST_TEST(part._bb[0].second==0.8);
+      BOOST_TEST(part._bb[1].first==0.4);
+      BOOST_TEST(part._bb[1].second==0.7);
+      BOOST_TEST(part._bb[2].first==0.05);
+      BOOST_TEST(part._bb[2].second==0.8);
+    }
+    
+
+    if(utils::Parallel::getProcessRank()==1){      
+      BOOST_TEST(part.feedbackMap.size()==3);
       BOOST_TEST(part.feedbackMap[0][0]==2);
       BOOST_TEST(part.feedbackMap[1][0]==1);
       BOOST_TEST(part.feedbackMap[2][0]==0);
-    } else if(utils::Parallel::getProcessRank()==2){      
+      BOOST_TEST(part.feedback.size()==1);
+    } else if(utils::Parallel::getProcessRank()==2){
       BOOST_TEST(part.feedback.size()==1);
       BOOST_TEST(part.feedback[0]==1);
     } else if(utils::Parallel::getProcessRank()==3){      
       BOOST_TEST(part.feedback.size()==1);
       BOOST_TEST(part.feedback[0]==0);
     }
-  
+
     }
   tearDownParallelEnvironment();
 }

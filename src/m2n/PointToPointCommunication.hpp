@@ -97,15 +97,37 @@ public:
                        int     valueDimension = 1);
 
   
-  /**
+
+
+
+
+
+/// Test Region
+
+
+
+  // virtual void sendMesh(mesh::Mesh mesh);  
+  // virtual void receiveMesh(mesh::Mesh mesh);
+  
+  // virtual void sendMesh(mesh::PtrMesh mesh);  
+  // virtual void receiveMesh(mesh::PtrMesh mesh);
+
+    /**
    * @brief Sends a mesh partition to remote local ranks.
    */
+
   virtual void sendMesh(mesh::Mesh &mesh);
 
   /**
    * @brief Receives a mesh partition from local remote connected ranks
    */
   virtual void receiveMesh(mesh::Mesh &mesh);
+
+// End Test
+
+
+
+
 
 
   virtual void sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap);

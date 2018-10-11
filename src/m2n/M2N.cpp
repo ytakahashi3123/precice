@@ -63,10 +63,8 @@ void M2N::requestMasterConnection(
   if (not utils::MasterSlave::_slaveMode) {
     assertion(_masterCom.use_count() > 0);
 
-    Publisher::ScopedSetEventNamePrefix ssenp(
-        "M2N::requestMasterConnection"
-        "/");
-
+    utils::ScopedEventPrefix sep("M2N::requestMasterConnection/");
+    
     _masterCom->requestConnection(nameAcceptor, nameRequester, 0, 1);
     _isMasterConnected = _masterCom->isConnected();
   }
@@ -210,10 +208,10 @@ void M2N::broadcastSendLocalMesh(mesh::Mesh &mesh)
 {
   int meshID = mesh.getID();
   if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
-    // assertion(_areSlavesConnected);
-    // assertion(_distComs.find(meshID) != _distComs.end());
-    // assertion(_distComs[meshID].get() != nullptr);
-
+    assertion(_areSlavesConnected);
+//    assertion(_distComs.find(meshID) != _distComs.end());
+    assertion(_distComs[meshID].get() != nullptr);
+    
     _distComs[meshID]->sendMesh(mesh);
   } else { //coupling mode
   }
@@ -289,9 +287,9 @@ void M2N::broadcastReceiveLocalMesh(mesh::Mesh &mesh)
 {
   int meshID = mesh.getID();
   if (utils::MasterSlave::_slaveMode || utils::MasterSlave::_masterMode) {
-    // assertion(_areSlavesConnected);
-    // assertion(_distComs.find(meshID) != _distComs.end());
-    // assertion(_distComs[meshID].get() != nullptr);
+    assertion(_areSlavesConnected);
+//    assertion(_distComs.find(meshID) != _distComs.end());
+    assertion(_distComs[meshID].get() != nullptr);
 
     _distComs[meshID]->receiveMesh(mesh);
   } else { //coupling mode

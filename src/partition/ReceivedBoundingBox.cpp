@@ -11,7 +11,6 @@
 #include "mesh/Edge.hpp"
 #include "mesh/Triangle.hpp"
 #include "utils/Helpers.hpp"
-//#include "utils/Globals.hpp"
 #include "utils/MasterSlave.hpp"
 #include <vector>
 #include <map>
@@ -28,7 +27,9 @@ ReceivedBoundingBox::ReceivedBoundingBox
   mesh::PtrMesh mesh, double safetyFactor, GeometricFilter geometricFilter)
 :
   Partition (mesh),
-  _bb(mesh->getBoundingBox()),
+  //_bb(mesh->getBoundingBox()),
+  _bb(mesh->getDimensions(), std::make_pair(std::numeric_limits<double>::max(),
+                                            std::numeric_limits<double>::lowest())),
   _dimensions(mesh->getDimensions()),
   _safetyFactor(safetyFactor),
   _geometricFilter(geometricFilter)
@@ -37,7 +38,8 @@ ReceivedBoundingBox::ReceivedBoundingBox
 void ReceivedBoundingBox::communicateBoundingBox()
 {
   TRACE();
-  Event e("receive global bounding box");  
+  Event e("receive global bounding box");
+  prepareBoundingBox();
   if (not utils::MasterSlave::_slaveMode) {
     remoteParComSize=0;
     _m2n->getMasterCommunication()->receive(remoteParComSize, 0);
@@ -70,11 +72,10 @@ void ReceivedBoundingBox::computeBoundingBox()
       }
       // receive _globalBB from master
       com::CommunicateBoundingBox(utils::MasterSlave::_communication).broadcastReceiveBoundingBoxMap(_globalBB);
-      numberOfVertices = _mesh->vertices().size();
-      prepareBoundingBox();
+      numberOfRemoteRanks = _globalBB.size();      
 
       // received bounding boxes are comapred with each rank bb
-      if (numberOfVertices>0) {
+      if (numberOfRemoteRanks>0) {
         for (auto &other_rank: _globalBB)
         {
           if (CompareBoundingBox(_bb,other_rank.second)) {
@@ -93,10 +94,9 @@ void ReceivedBoundingBox::computeBoundingBox()
       _m2n->getMasterCommunication()->send(utils::MasterSlave::_size , 0);
       utils::MasterSlave::_communication->broadcast(remoteParComSize);
       com::CommunicateBoundingBox(utils::MasterSlave::_communication).broadcastSendBoundingBoxMap(_globalBB);
-      numberOfVertices = _mesh->vertices().size();
-
-      prepareBoundingBox();      
-      if (numberOfVertices>0) {           
+      numberOfRemoteRanks = _globalBB.size();      
+      
+      if (numberOfRemoteRanks >0) {           
         for (auto &other_rank: _globalBB)
         {
           if (CompareBoundingBox(_bb,other_rank.second)) {
@@ -119,7 +119,7 @@ void ReceivedBoundingBox::computeBoundingBox()
     if (utils::MasterSlave::_masterMode)
     {
       for (int i = 0; i < remoteParComSize; i++) {
-        int counter;
+        int counter=0;
         _m2n->getMasterCommunication()->receive(counter, 0);
         vertexCounters.push_back(counter);
       }   
@@ -138,8 +138,114 @@ void ReceivedBoundingBox::communicate()
 }
 
 void ReceivedBoundingBox::compute()
-{  
-  // code not tested yet
+{
+  TRACE(_geometricFilter);
+
+  if (not utils::MasterSlave::_slaveMode) {
+    CHECK(_fromMapping.use_count() > 0 || _toMapping.use_count() > 0,
+          "The received mesh " << _mesh->getName()
+          << " needs a mapping, either from it, to it, or both. Maybe you don't want to receive this mesh at all?")
+  }
+
+
+  // To understand the following steps, it is recommended to look at BU's thesis, especially Figure 69 on page 89 
+  // for RBF-based filtering. https://mediatum.ub.tum.de/doc/1320661/document.pdf
+
+
+  // (0) set global number of vertices before filtering
+
+  // (1) Bounding-Box-Filter
+  
+
+  INFO("Broadcast mesh " << _mesh->getName());
+    
+  if (_geometricFilter == BROADCAST_FILTER) {
+
+    INFO("Filter mesh " << _mesh->getName() << " by bounding-box");
+    Event e2("partition.filterMeshBB." + _mesh->getName());    
+    mesh::Mesh filteredMesh("FilteredMesh", _dimensions, _mesh->isFlipNormals());
+    filterMesh(filteredMesh, true);
+    if ((_fromMapping.use_count() > 0 && _fromMapping->getOutputMesh()->vertices().size() > 0) ||
+        (_toMapping.use_count() > 0 && _toMapping->getInputMesh()->vertices().size() > 0)) {
+      // this rank has vertices at the coupling interface
+      // then, also the filtered mesh should still have vertices
+      std::string msg = "The re-partitioning completely filtered out the mesh " + _mesh->getName() + " received on this rank at the coupling interface. "
+        "Most probably, the coupling interfaces of your coupled participants do not match geometry-wise. "
+        "Please check your geometry setup again. Small overlaps or gaps are no problem. "
+        "If your geometry setup is correct and if you have very different mesh resolutions on both sides, increasing the safety-factor "
+        "of the decomposition strategy might be necessary.";
+      CHECK(filteredMesh.vertices().size() > 0, msg);
+    }
+
+    DEBUG("Bounding box filter, filtered from " << _mesh->vertices().size() << " vertices to " << filteredMesh.vertices().size() << " vertices.");
+    _mesh->clear();
+    _mesh->addMesh(filteredMesh);
+    _mesh->computeState();
+    e2.stop();
+  }
+  
+
+  // (2) Tag vertices 1st round (i.e. who could be owned by this rank)
+  DEBUG("Tag vertices for filtering: 1st round.");
+  // go to both meshes, vertex is tagged if already one mesh tags him
+  if (_fromMapping.use_count() > 0)
+    _fromMapping->tagMeshFirstRound();
+  if (_toMapping.use_count() > 0)
+    _toMapping->tagMeshFirstRound();
+
+  // (3) Define which vertices are owned by this rank
+  DEBUG("Create owner information.");
+  createOwnerInformation();
+
+  // (4) Tag vertices 2nd round (what should be filtered out)
+  DEBUG("Tag vertices for filtering: 2nd round.");
+  if (_fromMapping.use_count() > 0)
+    _fromMapping->tagMeshSecondRound();
+  if (_toMapping.use_count() > 0)
+    _toMapping->tagMeshSecondRound();
+
+  // (5) Filter mesh according to tag
+  INFO("Filter mesh " << _mesh->getName() << " by mappings");
+  Event e5("partition.filterMeshMappings" + _mesh->getName());
+  mesh::Mesh filteredMesh("FilteredMesh", _dimensions, _mesh->isFlipNormals());
+  filterMesh(filteredMesh, false);
+  DEBUG("Mapping filter, filtered from " << _mesh->vertices().size() << " vertices to " << filteredMesh.vertices().size() << " vertices.");
+  _mesh->clear();
+  _mesh->addMesh(filteredMesh);
+  _mesh->computeState();
+  e5.stop();
+
+  // (6) Compute distribution
+  INFO("Feedback distribution for mesh " << _mesh->getName());
+  Event e6("partition.feedbackMesh." + _mesh->getName());
+  
+  int              numberOfVertices = _mesh->vertices().size();
+  std::vector<int> vertexIDs(numberOfVertices, -1);
+  for (int i = 0; i < numberOfVertices; i++) {
+    vertexIDs[i] = _mesh->vertices()[i].getGlobalIndex();
+  }
+  _mesh->getVertexDistribution()[utils::MasterSlave::_rank] = vertexIDs;
+
+  remoteParComSize = vertexCounters.size();// number of other particpants ranks
+
+  // This nested loop creats a fill in the localCommunicationbMap which shows this local rank needs which vertices from which rank of the other particpant
+  for (auto &remoteVertex : vertexIDs) {
+    for (int i=0; i <=remoteParComSize ; i++) {
+      if (remoteVertex <= vertexCounters[i]) {
+        localCommunicationMap[i].push_back(remoteVertex);
+        i=remoteParComSize+1;
+      }
+    }
+  }
+
+  int globalNumberOfVertices = -1;
+  _mesh->setGlobalNumberOfVertices(globalNumberOfVertices);
+  _m2n->sendCommunicationMap(localCommunicationMap, *_mesh);  
+  
+  e6.stop();
+
+  computeVertexOffsets();
+
 }
 
 bool ReceivedBoundingBox::CompareBoundingBox(mesh::Mesh::BoundingBox currentBB, mesh::Mesh::BoundingBox receivedBB)
@@ -290,6 +396,7 @@ void ReceivedBoundingBox:: createOwnerInformation(){
       DEBUG("My owner information: " << ownerVec);
       setOwnerInformation(ownerVec);
     }
+
   }
 
 
@@ -328,6 +435,8 @@ void ReceivedBoundingBox:: createOwnerInformation(){
     for (int rank = 1; rank < utils::MasterSlave::_size; rank++){
       int localNumberOfVertices = -1;
       utils::MasterSlave::_communication->receive(localNumberOfVertices,rank);
+    }
+      
       DEBUG("Rank " << rank << " has " << localNumberOfVertices << " vertices.");
       slaveOwnerVecs[rank].resize(localNumberOfVertices, 0);
       slaveTags[rank].resize(localNumberOfVertices, -1);
@@ -379,7 +488,7 @@ void ReceivedBoundingBox:: createOwnerInformation(){
     // master data
     DEBUG("My owner information: " << slaveOwnerVecs[0]);
     setOwnerInformation(slaveOwnerVecs[0]);
-
+     
 
 #     ifndef NDEBUG
     for(size_t i=0;i<globalOwnerVec.size();i++){

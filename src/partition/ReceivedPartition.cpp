@@ -493,5 +493,11 @@ void ReceivedPartition::setOwnerInformation(const std::vector<int> &ownerVec)
   }
 }
 
+void ReceivedPartition::communicateBoundingBox()
+{}
+void ReceivedPartition::computeBoundingBox()
+{}
+
+
 } // namespace partition
 } // namespace precice

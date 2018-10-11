@@ -41,6 +41,13 @@ public:
   /// The partition is computed, i.e. the mesh re-partitioned if required and all data structures are set up.
   virtual void compute() = 0;
 
+    /// The mesh is communicated between both master ranks (if required)
+  virtual void communicateBoundingBox() = 0;
+
+  /// The partition is computed, i.e. the mesh re-partitioned if required and all data structures are set up.
+  virtual void computeBoundingBox() = 0;
+
+
   void setFromMapping(mapping::PtrMapping fromMapping)
   {
     _fromMapping = fromMapping;
@@ -56,6 +63,7 @@ public:
     _m2n = m2n;
   }
 
+
 protected:
   mesh::PtrMesh _mesh;
 
@@ -64,6 +72,7 @@ protected:
   mapping::PtrMapping _toMapping;
 
   m2n::PtrM2N _m2n;
+
 
   /// Decides which rank owns which vertex, information stored at each rank.
   virtual void createOwnerInformation() = 0;

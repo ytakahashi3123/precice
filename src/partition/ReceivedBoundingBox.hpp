@@ -64,6 +64,8 @@ public:
   friend struct PartitionTests::ProvidedBoundingBoxTests::TestProvidedBoundingBox3D;
   friend struct PartitionTests::ProvidedBoundingBoxTests::TestM2NMeshExchange;
 
+  int check_parm;
+
   
 private:
 
@@ -90,6 +92,7 @@ private:
   int _dimensions;
   double _safetyFactor;
   int numberOfVertices;
+  int numberOfRemoteRanks;
   static logging::Logger _log;
   std::vector<int> vertexCounters;
   GeometricFilter _geometricFilter;

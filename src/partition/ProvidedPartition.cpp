@@ -136,5 +136,11 @@ void ProvidedPartition::createOwnerInformation()
   }
 }
 
+void ProvidedPartition::communicateBoundingBox()
+{}
+void ProvidedPartition::computeBoundingBox()
+{}
+
+
 } // namespace partition
 } // namespace precice
