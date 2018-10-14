@@ -198,7 +198,7 @@ void ProvidedBoundingBox::communicate()
 void ProvidedBoundingBox::compute()
 {
   // each rank receives its final communication map
-//  _m2n->receiveCommunicationMap(_mesh->getCommunicationMap(), *_mesh);
+  _m2n->receiveCommunicationMap(_mesh->getCommunicationMap(), *_mesh);
 }
 
 void ProvidedBoundingBox::createOwnerInformation()

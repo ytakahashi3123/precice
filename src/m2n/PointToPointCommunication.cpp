@@ -3,6 +3,7 @@
 #include <thread>
 #include "com/Communication.hpp"
 #include "com/CommunicateMesh.hpp"
+#include "com/CommunicateBoundingBox.hpp"
 #include "com/CommunicationFactory.hpp"
 #include "mesh/Edge.hpp"
 #include "mesh/Mesh.hpp"
@@ -629,7 +630,7 @@ void PointToPointCommunication::receive(double *itemsToReceive,
   _buffer.clear();
 }
 
-//////// Start Test
+
 
 void PointToPointCommunication::sendMesh(mesh::Mesh &mesh)
 {  
@@ -645,48 +646,18 @@ void PointToPointCommunication::receiveMesh(mesh::Mesh &mesh)
   }  
 }
 
-// void PointToPointCommunication::sendMesh(mesh::PtrMesh mesh)
-// {  
-//   for (auto &mapping : _mappings) {
-//     com::CommunicateMesh(mapping.communication).sendMesh(mesh, mapping.localRemoteRank);
-//   }  
-// }
-
-// void PointToPointCommunication::receiveMesh(mesh::PtrMesh mesh)
-// {  
-//   for (auto &mapping : _mappings) {
-//     com::CommunicateMesh(mapping.communication).receiveMesh(mesh, mapping.localRemoteRank);
-//   }  
-// }
-
-// void PointToPointCommunication::sendMesh(mesh::Mesh mesh)
-// {  
-//   for (auto &mapping : _mappings) {
-//     com::CommunicateMesh(mapping.communication).sendMesh(mesh, mapping.localRemoteRank);
-//   }  
-// }
-
-// void PointToPointCommunication::receiveMesh(mesh::Mesh mesh)
-// {  
-//   for (auto &mapping : _mappings) {
-//     com::CommunicateMesh(mapping.communication).receiveMesh(mesh, mapping.localRemoteRank);
-//   }  
-// }
-
-
-/////// End Test
 
 void PointToPointCommunication::sendCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
 {
   for (auto &mapping : _mappings) {
-    mapping.communication->send(localCommunicationMap[mapping.localRemoteRank], mapping.localRemoteRank);
+    mapping.communication->send(localCommunicationMap[mapping.globalRemoteRank], mapping.localRemoteRank);
   }
 }
 
 void PointToPointCommunication::receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
 {
   for (auto &mapping : _mappings) {
-    mapping.communication->receive(localCommunicationMap[mapping.localRemoteRank], mapping.localRemoteRank);
+    mapping.communication->receive(localCommunicationMap[mapping.globalRemoteRank], mapping.localRemoteRank);
   }
 }
 
