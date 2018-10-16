@@ -183,14 +183,14 @@ void GatherScatterCommunication::sendCommunicationMap(mesh::Mesh::FeedbackMap &l
 {}
 void GatherScatterCommunication::receiveCommunicationMap(mesh::Mesh::FeedbackMap &localCommunicationMap)
 {}
-/*
+
 void GatherScatterCommunication::acceptPreConnection(std::string const &nameAcceptor, std::string const &nameRequester)
 {}
   
 void GatherScatterCommunication::requestPreConnection(std::string const &nameAcceptor, std::string const &nameRequester)
 {}
 
-*/
+
 
 } // namespace m2n
 } // namespace precice

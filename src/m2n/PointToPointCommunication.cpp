@@ -267,7 +267,178 @@ bool PointToPointCommunication::isConnected()
   return _isConnected;
 }
 
+// The approximate complexity of this function is O((number of local data
+// indices for the current rank in `thisVertexDistribution') * (total number of
+// data indices for all ranks in `otherVertexDistribution')).
+std::map<int, std::vector<int>> buildCommunicationMap(
+    // `thisVertexDistribution' is input vertex distribution from this participant.
+    mesh::Mesh::VertexDistribution const &thisVertexDistribution,
+    // `otherVertexDistribution' is input vertex distribution from other participant.
+    mesh::Mesh::VertexDistribution const &otherVertexDistribution,
+    int                                    thisRank = utils::MasterSlave::_rank)
+{
+  std::map<int, std::vector<int>> communicationMap;
+
+  auto iterator = thisVertexDistribution.find(thisRank);
+
+  if (iterator == thisVertexDistribution.end())
+    return communicationMap;
+
+  auto const &indices = iterator->second;
+
+  int index = 0;
+
+  for (int thisIndex : indices) {
+    for (const auto &other : otherVertexDistribution) {
+      for (const auto &otherIndex : other.second) {
+        if (thisIndex == otherIndex) {
+          communicationMap[other.first].push_back(index);
+          break;
+        }
+      }
+    }
+    ++index;
+  }
+
+  return communicationMap;
+}
+
+
 void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor,
+                                                 std::string const &nameRequester)
+{
+  TRACE(nameAcceptor, nameRequester);
+  CHECK(not isConnected(), "Already connected!");
+  CHECK(utils::MasterSlave::_masterMode || utils::MasterSlave::_slaveMode,
+        "You can only use a point-to-point communication between two participants which both use a master. "
+            << "Please use distribution-type gather-scatter instead.");
+
+  mesh::Mesh::VertexDistribution &vertexDistribution = _mesh->getVertexDistribution();
+  mesh::Mesh::VertexDistribution  requesterVertexDistribution;
+
+  if (utils::MasterSlave::_masterMode) {
+    // Establish connection between participants' master processes.
+    auto c = _communicationFactory->newCommunication();
+
+    c->acceptConnection(nameAcceptor, nameRequester);
+
+    int requesterMasterRank;
+
+    // Exchange ranks of participants' master processes.
+    c->send(utils::MasterSlave::_masterRank, 0);
+    c->receive(requesterMasterRank, 0);
+
+    // Exchange vertex distributions.
+    m2n::send(vertexDistribution, 0, c);
+    m2n::receive(requesterVertexDistribution, 0, c);
+  } else {
+    assertion(utils::MasterSlave::_slaveMode);
+  }
+
+  m2n::broadcast(vertexDistribution);
+  m2n::broadcast(requesterVertexDistribution);
+
+  // Local (for process rank in the current participant) communication map that
+  // defines a mapping from a process rank in the remote participant to an array
+  // of local data indices, which define a subset of local (for process rank in
+  // the current participant) data to be communicated between the current
+  // process rank and the remote process rank.
+  //
+  // Example. Assume that the current process rank is 3. Assume that its
+  // `communicationMap' is
+  //
+  //   1 -> {1, 3}
+  //   4 -> {0, 2}
+  //
+  // then it means that the current process (with rank 3)
+  // - has to communicate (send/receive) data with local indices 1 and 3 with
+  //   the remote process with rank 1;
+  // - has to communicate (send/receive) data with local indices 0 and 2 with
+  //   the remote process with rank 4.
+  std::map<int, std::vector<int>> communicationMap = m2n::buildCommunicationMap(
+    vertexDistribution, requesterVertexDistribution);
+
+// Print `communicationMap'.
+#ifdef P2P_LCM_PRINT
+  e.stop(true);
+  print(communicationMap);
+  e.start(true);
+#endif
+
+// Print statistics of `communicationMap'.
+#ifdef P2P_LCM_PRINT_STATS
+  e.stop(true);
+  printCommunicationPartnerCountStats(communicationMap);
+  printLocalIndexCountStats(communicationMap);
+  e.start(true);
+#endif
+
+#ifdef SuperMUC_WORK
+  try {
+    auto addressDirectory = _communicationFactory->addressDirectory();
+
+    if (utils::MasterSlave::_masterMode) {
+      Event e("m2n.createDirectories");
+
+      for (int rank = 0; rank < utils::MasterSlave::_size; ++rank) {
+        Publisher::createDirectory(addressDirectory + "/" + "." + nameAcceptor + "-" + _mesh->getName() +
+                                   "-" + std::to_string(rank) + ".address");
+      }
+    }
+    utils::Parallel::synchronizeProcesses();
+  } catch (...) {
+  }
+#endif
+
+  if (communicationMap.empty()) {
+    _isConnected = true;
+    return;
+  }
+
+  // Accept point-to-point connections (as server) between the current acceptor
+  // process (in the current participant) with rank `utils::MasterSlave::_rank'
+  // and (multiple) requester processes (in the requester participant).
+  auto c = _communicationFactory->newCommunication();
+
+#ifdef SuperMUC_WORK
+  Publisher::ScopedPushDirectory spd("." + nameAcceptor + "-" + _mesh->getName() + "-" +
+                                     std::to_string(utils::MasterSlave::_rank) + ".address");
+#endif
+
+  c->acceptConnectionAsServer(
+      nameAcceptor + "-" + std::to_string(utils::MasterSlave::_rank),
+      nameRequester,
+      communicationMap.size());
+
+  // assertion(c->getRemoteCommunicatorSize() == communicationMap.size());
+
+  _mappings.reserve(communicationMap.size());
+
+  for (size_t localRequesterRank = 0; localRequesterRank < communicationMap.size(); ++localRequesterRank) {
+    int globalRequesterRank = -1;
+
+    c->receive(globalRequesterRank, localRequesterRank);
+
+    auto indices = std::move(communicationMap[globalRequesterRank]);
+
+    // NOTE:
+    // Everything is moved (efficiency)!
+    // On the acceptor participant side, the communication object `c'
+    // behaves as a server, i.e. it implicitly accepts multiple connections
+    // to requester processes (in the requester participant). As a result,
+    // only one communication object `c' is needed to satisfy
+    // `communicationMap', and, therefore, for data structure consistency
+    // of `_mappings' with the requester participant side, we simply
+    // duplicate references to the same communication object `c'.
+    _mappings.push_back({static_cast<int>(localRequesterRank), globalRequesterRank,
+                         std::move(indices), c, com::PtrRequest(), {}});
+  }
+
+  _isConnected = true;
+}
+
+
+void PointToPointCommunication::acceptPreConnection(std::string const &nameAcceptor,
                                                  std::string const &nameRequester)
 {
   TRACE(nameAcceptor, nameRequester);
@@ -319,9 +490,6 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   // - has to communicate (send/receive) data with local indices 0 and 2 with
   //   the remote process with rank 4.
 
-
-//  _localCommunicationMap = m2n::buildCommunicationMap(
-  //  _localIndexCount, vertexDistribution, requesterVertexDistribution);
  
   _localCommunicationMap = _mesh->getCommunicationMap();  
 
@@ -409,8 +577,130 @@ void PointToPointCommunication::acceptConnection(std::string const &nameAcceptor
   _isConnected = true;
 }
 
-
 void PointToPointCommunication::requestConnection(std::string const &nameAcceptor,
+                                                  std::string const &nameRequester)
+{
+  TRACE(nameAcceptor, nameRequester);
+  CHECK(not isConnected(), "Already connected!");
+  CHECK(utils::MasterSlave::_masterMode || utils::MasterSlave::_slaveMode,
+        "You can only use a point-to-point communication between two participants which both use a master. "
+        << "Please use distribution-type gather-scatter instead.");
+
+  mesh::Mesh::VertexDistribution &vertexDistribution = _mesh->getVertexDistribution();
+  mesh::Mesh::VertexDistribution  acceptorVertexDistribution;
+
+  if (utils::MasterSlave::_masterMode) {
+    // Establish connection between participants' master processes.
+    auto c = _communicationFactory->newCommunication();
+    {
+      c->requestConnection(nameAcceptor, nameRequester, 0, 1);
+    }
+
+    int acceptorMasterRank;
+
+    // Exchange ranks of participants' master processes.
+    c->receive(acceptorMasterRank, 0);
+    c->send(utils::MasterSlave::_masterRank, 0);
+
+    // Exchange vertex distributions.
+    m2n::receive(acceptorVertexDistribution, 0, c);
+    m2n::send(vertexDistribution, 0, c);
+  } else {
+    assertion(utils::MasterSlave::_slaveMode);
+  }
+
+  m2n::broadcast(vertexDistribution);
+  m2n::broadcast(acceptorVertexDistribution);
+
+  // Local (for process rank in the current participant) communication map that
+  // defines a mapping from a process rank in the remote participant to an array
+  // of local data indices, which define a subset of local (for process rank in
+  // the current participant) data to be communicated between the current
+  // process rank and the remote process rank.
+  //
+  // Example. Assume that the current process rank is 3. Assume that its
+  // `communicationMap' is
+  //
+  //   1 -> {1, 3}
+  //   4 -> {0, 2}
+  //
+  // then it means that the current process (with rank 3)
+  // - has to communicate (send/receive) data with local indices 1 and 3 with
+  //   the remote process with rank 1;
+  // - has to communicate (send/receive) data with local indices 0 and 2 with
+  //   the remote process with rank 4.
+  std::map<int, std::vector<int>> communicationMap = m2n::buildCommunicationMap(
+    vertexDistribution, acceptorVertexDistribution);
+
+// Print `communicationMap'.
+#ifdef P2P_LCM_PRINT
+  e.stop(true);
+  print(communicationMap);
+  e.start(true);
+#endif
+
+// Print statistics of `communicationMap'.
+#ifdef P2P_LCM_PRINT_STATS
+  e.stop(true);
+  printCommunicationPartnerCountStats(communicationMap);
+  printLocalIndexCountStats(communicationMap);
+  e.start(true);
+#endif
+
+#ifdef SuperMUC_WORK
+  try {
+    auto addressDirectory = _communicationFactory->addressDirectory();
+
+    utils::Parallel::synchronizeProcesses();
+  } catch (...) {
+  }
+#endif
+
+  if (communicationMap.empty()) {
+    _isConnected = true;
+    return;
+  }
+
+  std::vector<com::PtrRequest> requests;
+  requests.reserve(communicationMap.size());
+  _mappings.reserve(communicationMap.size());
+
+  // Request point-to-point connections (as client) between the current
+  // requester process (in the current participant) and (multiple) acceptor
+  // processes (in the acceptor participant) with ranks `globalAcceptorRank'
+  // according to communication map.
+  for (auto &i : communicationMap) {
+    auto globalAcceptorRank = i.first;
+    auto indices            = std::move(i.second);
+    auto c = _communicationFactory->newCommunication();
+
+#ifdef SuperMUC_WORK
+    Publisher::ScopedPushDirectory spd("." + nameAcceptor + "-" + _mesh->getName() + "-" +
+                                       std::to_string(globalAcceptorRank) + ".address");
+#endif
+
+    c->requestConnectionAsClient(nameAcceptor + "-" + std::to_string(globalAcceptorRank), nameRequester);
+    // assertion(c->getRemoteCommunicatorSize() == 1);
+
+    auto request = c->aSend(utils::MasterSlave::_rank, 0);
+
+    requests.push_back(request);
+
+    // NOTE:
+    // Everything is moved (efficiency)!
+    // On the requester participant side, the communication objects behave
+    // as clients, i.e. each of them requests only one connection to
+    // acceptor process (in the acceptor participant).
+    _mappings.push_back({0, globalAcceptorRank,
+                         std::move(indices), c, com::PtrRequest(), {}});
+  }
+
+  com::Request::wait(requests);
+  _isConnected = true;
+}
+
+
+void PointToPointCommunication::requestPreConnection(std::string const &nameAcceptor,
                                                   std::string const &nameRequester)
 {
   TRACE(nameAcceptor, nameRequester);
@@ -463,8 +753,6 @@ void PointToPointCommunication::requestConnection(std::string const &nameAccepto
   //   the remote process with rank 1;
   // - has to communicate (send/receive) data with local indices 0 and 2 with
   //   the remote process with rank 4.
-
-//_localCommunicationMap = m2n::buildCommunicationMap(_localIndexCount, vertexDistribution, acceptorVertexDistribution);
 
 _localCommunicationMap = _mesh->getCommunicationMap();
 
@@ -541,6 +829,7 @@ _localCommunicationMap = _mesh->getCommunicationMap();
 
   _isConnected = true;
 }
+
 
 
 void PointToPointCommunication::closeConnection()

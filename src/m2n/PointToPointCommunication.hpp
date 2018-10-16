@@ -67,6 +67,15 @@ public:
   virtual void requestConnection(std::string const &nameAcceptor,
                                  std::string const &nameRequester);
 
+  virtual void acceptPreConnection(std::string const &nameAcceptor,
+                                std::string const &nameRequester);
+  virtual void requestPreConnection(std::string const &nameAcceptor,
+                                 std::string const &nameRequester);
+
+
+  
+
+
 
   // same as previous accept/requestconnection except thes ones only create channels! No vertex list is needed!
 /*  virtual void acceptPreConnection(std::string const &nameAcceptor,

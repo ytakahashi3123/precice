@@ -64,13 +64,11 @@ public:
   friend struct PartitionTests::ProvidedBoundingBoxTests::TestProvidedBoundingBox3D;
   friend struct PartitionTests::ProvidedBoundingBoxTests::TestM2NMeshExchange;
 
-  int check_parm;
-
   
 private:
 
   
-  bool CompareBoundingBox(mesh::Mesh::BoundingBox currentBB, mesh::Mesh::BoundingBox receivedBB);
+  bool compareBoundingBox(mesh::Mesh::BoundingBox currentBB, mesh::Mesh::BoundingBox receivedBB);
 
   void filterMesh(mesh::Mesh& filteredMesh, const bool filterByBB);
 
@@ -83,7 +81,7 @@ private:
   /// Helper function for 'createOwnerFunction' to set local owner information
   void setOwnerInformation(const std::vector<int> &ownerVec);
 
-  int remoteParComSize;
+  int remoteParComSize = 0;
   
   mesh::Mesh::BoundingBoxMap _globalBB;
   mesh::Mesh::BoundingBox _bb;
@@ -91,8 +89,8 @@ private:
   mesh::Mesh::FeedbackMap  feedbackMap; // int : each rank, vect: connected ranks
   int _dimensions;
   double _safetyFactor;
-  int numberOfVertices;
-  int numberOfRemoteRanks;
+  int numberOfVertices = 0;
+  int numberOfRemoteRanks = 0;
   static logging::Logger _log;
   std::vector<int> vertexCounters;
   GeometricFilter _geometricFilter;

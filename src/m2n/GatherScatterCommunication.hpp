@@ -56,12 +56,12 @@ public:
       const std::string &nameAcceptor,
       const std::string &nameRequester);
 
-/*  virtual void acceptPreConnection(std::string const &nameAcceptor,
+  virtual void acceptPreConnection(std::string const &nameAcceptor,
                                    std::string const &nameRequester);
    
   virtual void requestPreConnection(std::string const &nameAcceptor,
                                     std::string const &nameRequester);
-*/
+
 
   /**
    * @brief Disconnects from communication space, i.e. participant.

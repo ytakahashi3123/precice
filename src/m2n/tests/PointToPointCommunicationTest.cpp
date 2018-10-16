@@ -292,15 +292,15 @@ void P2PComTest2(com::PtrCommunicationFactory cf)
   Parallel::synchronizeProcesses();
   utils::Parallel::clearGroups();
 }
-
-/*BOOST_AUTO_TEST_CASE(SocketCommunication, * testing::OnSize(4))
+/*
+BOOST_AUTO_TEST_CASE(SocketCommunication, * testing::OnSize(4))
 {
   com::PtrCommunicationFactory cf(new com::SocketCommunicationFactory);
   if (utils::Parallel::getProcessRank() < 4) {
     P2PComTest1(cf);
     P2PComTest2(cf);
   }
-}
+  }
 
 BOOST_AUTO_TEST_CASE(MPIPortsCommunication,
                      * testing::OnSize(4)
@@ -434,11 +434,11 @@ BOOST_AUTO_TEST_CASE(P2PComMeshTest, * testing::OnSize(4))
 
   if (utils::Parallel::getProcessRank() < 2) {
   
-    c.requestConnection("Solid", "Fluid");
+    c.requestPreConnection("Solid", "Fluid");
     c.sendMesh(*mesh);
   } else {
 
-    c.acceptConnection("Solid", "Fluid");
+    c.acceptPreConnection("Solid", "Fluid");
     c.receiveMesh(*mesh);
 
       if(utils::Parallel::getProcessRank() ==2 )
@@ -454,8 +454,6 @@ BOOST_AUTO_TEST_CASE(P2PComMeshTest, * testing::OnSize(4))
       }
     
   }
-  
-//  tearDownParallelEnvironment:
   
   utils::MasterSlave::_communication = nullptr;
   utils::MasterSlave::reset();
@@ -574,13 +572,13 @@ BOOST_AUTO_TEST_CASE(P2PComLCMTest, * testing::OnSize(4))
 
   if (utils::Parallel::getProcessRank() < 2) {
   
-    c.requestConnection("Solid", "Fluid");
+    c.requestPreConnection("Solid", "Fluid");
     c.sendCommunicationMap(localCommunicationMap);
     BOOST_TEST(mesh->getID()==0);
    
   } else
   {
-    c.acceptConnection("Solid", "Fluid");
+    c.acceptPreConnection("Solid", "Fluid");
     c.receiveCommunicationMap(localCommunicationMap);
     BOOST_TEST(mesh->getID()==0);
   }
@@ -608,8 +606,6 @@ BOOST_AUTO_TEST_CASE(P2PComLCMTest, * testing::OnSize(4))
     BOOST_TEST(localCommunicationMap[1][1] ==1133);
     BOOST_TEST(localCommunicationMap[1][2] ==11333);   
   }
-
-  //  tearDownParallelEnvironment:
   
   utils::MasterSlave::_communication = nullptr;
   utils::MasterSlave::reset();

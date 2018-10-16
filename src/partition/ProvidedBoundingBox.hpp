@@ -72,7 +72,7 @@ private:
   std::vector<int> connected_ranks;
   double _safetyFactor;
   std::vector<int> vertexCounters;
-  int remoteParComSize;
+  int remoteParComSize = 0 ;
   
 };
 

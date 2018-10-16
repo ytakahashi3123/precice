@@ -822,7 +822,7 @@ BOOST_AUTO_TEST_CASE(TestM2NMeshExchange, * testing::OnSize(4))
 
     
     part.setM2N(p2p);
-    p2p->requestSlavesConnection("Solid", "Fluid");
+    p2p->requestSlavesPreConnection("Solid", "Fluid");
 
     part.communicate();
     part.compute();
@@ -861,7 +861,7 @@ BOOST_AUTO_TEST_CASE(TestM2NMeshExchange, * testing::OnSize(4))
     mesh_received->getCommunicationMap()[0].push_back(-1);
     mesh_received->getCommunicationMap()[1].push_back(-1);
     part.setM2N(p2p);
-    p2p->acceptSlavesConnection("Solid", "Fluid");
+    p2p->acceptSlavesPreConnection("Solid", "Fluid");
 
     part.communicate();
     for (auto & vertex : part._mesh->vertices() ) {

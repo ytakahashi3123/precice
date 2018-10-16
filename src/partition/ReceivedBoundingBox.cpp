@@ -43,6 +43,8 @@ void ReceivedBoundingBox::communicateBoundingBox()
   if (not utils::MasterSlave::_slaveMode) {
     remoteParComSize=0;
     _m2n->getMasterCommunication()->receive(remoteParComSize, 0);
+
+    // we need to construct _globalBB first and then we can fill in that
     for (int remoteRank = 0; remoteRank < remoteParComSize; remoteRank++ ) {
       _globalBB[remoteRank]= _bb;
     }
@@ -78,7 +80,7 @@ void ReceivedBoundingBox::computeBoundingBox()
       if (numberOfRemoteRanks>0) {
         for (auto &other_rank: _globalBB)
         {
-          if (CompareBoundingBox(_bb,other_rank.second)) {
+          if (compareBoundingBox(_bb,other_rank.second)) {
             feedback.push_back(other_rank.first);            
           }
         }
@@ -96,21 +98,22 @@ void ReceivedBoundingBox::computeBoundingBox()
       com::CommunicateBoundingBox(utils::MasterSlave::_communication).broadcastSendBoundingBoxMap(_globalBB);
       numberOfRemoteRanks = _globalBB.size();      
       
-      if (numberOfRemoteRanks >0) {           
-        for (auto &other_rank: _globalBB)
-        {
-          if (CompareBoundingBox(_bb,other_rank.second)) {
-            feedback.push_back(other_rank.first);
-          }          
-        }
-        feedbackMap[0]=feedback;
+
+      for (auto &other_rank: _globalBB)
+      {
+        if (compareBoundingBox(_bb,other_rank.second)) {
+          feedback.push_back(other_rank.first);
+        }          
       }
-      
+      feedbackMap[0]=feedback;
+     
 
       for (int rank_slave=1; rank_slave < utils::MasterSlave::_size ; rank_slave++) {
         utils::MasterSlave::_communication->receive(feedback, rank_slave);
         feedbackMap[rank_slave]=feedback;        
       }
+
+      // send size here
         com::CommunicateBoundingBox(_m2n->getMasterCommunication()).sendFeedbackMap(feedbackMap,0);             
     }
     e1.stop();
@@ -250,7 +253,7 @@ void ReceivedBoundingBox::compute()
   
 }
 
-bool ReceivedBoundingBox::CompareBoundingBox(mesh::Mesh::BoundingBox currentBB, mesh::Mesh::BoundingBox receivedBB)
+bool ReceivedBoundingBox::compareBoundingBox(mesh::Mesh::BoundingBox currentBB, mesh::Mesh::BoundingBox receivedBB)
 {
   //int sizeofBB = currentBB.size();
   bool intersect=1;
