@@ -1,5 +1,5 @@
 language: cpp
-dist: trusty
+dist: xenial
 sudo: false
 
 compiler:
@@ -8,10 +8,8 @@ compiler:
 
 addons:
   apt:
-    sources:
-      - ubuntu-toolchain-r-test
     packages:
-      - g++-6
+      - scons
       - libopenmpi-dev
       - openmpi-bin
       - python-numpy
@@ -28,7 +26,6 @@ env:
     - CPLUS_INCLUDE_PATH="$PETSC_DIR/include:$PETSC_DIR/$PETSC_ARCH/include:$LOCAL_INSTALL/include:$CPLUS_INCLUDE_PATH"
     - LD_LIBRARY_PATH="$PETSC_DIR/$PETSC_ARCH/lib:$LOCAL_INSTALL/lib:$LD_LIBRARY_PATH"
     - LIBRARY_PATH="$PETSC_DIR/$PETSC_ARCH/lib:$LOCAL_INSTALL/lib:$LIBRARY_PATH"
-    - PYTHONPATH="$PETSC_DIR/$PETSC_ARCH/lib:/usr/lib/python2.7:/usr/lib/python2.7/dist-packages:/usr/lib/python2.7/plat-x86_64-linux-gnu"
 
   matrix:
     - MPI=on PETSC=on
@@ -40,7 +37,6 @@ cache:
     - $LOCAL_INSTALL
 
 before_install:
-  - if [ "$CXX" = "g++" ]; then export CXX="g++-6" && export CC="gcc-6"; fi
   - export OMPI_CXX=$CXX
   - if [ "$MPI" = "on" ]; then export CXX="mpicxx"; fi
 
