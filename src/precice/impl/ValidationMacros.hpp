@@ -79,8 +79,8 @@
  * @attention Do not use this macro directly!
  */
 #define PRECICE_VALIDATE_DATA_ID_IMPL(id) \
-    CHECK(std::any_of(_dataIDs.begin(), _dataIDs.end(), [id](const typename decltype(_dataIDs)::value_type & meshkv){ \
-                return std::any_of(meshkv.second.begin(), meshkv.second.end(), [id](const typename decltype(meshkv.second)::value_type& datakv){ \
+    CHECK(std::any_of(_dataIDs.begin(), _dataIDs.end(), [id](const auto & meshkv){ \
+                return std::any_of(meshkv.second.begin(), meshkv.second.end(), [id](const auto & datakv){ \
                         return datakv.second == id; \
                         }); \
                 }), \
