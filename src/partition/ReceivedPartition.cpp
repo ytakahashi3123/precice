@@ -10,6 +10,7 @@
 #include "utils/Event.hpp"
 #include "utils/Helpers.hpp"
 #include "utils/MasterSlave.hpp"
+#include <algorithm>
 
 using precice::utils::Event;
 
@@ -255,9 +256,16 @@ void ReceivedPartition::filterMesh(mesh::Mesh &filteredMesh, const bool filterBy
   std::map<int, mesh::Edge *>   edgeMap;
   int                           vertexCounter = 0;
 
+  auto vertexSelector = [filterByBB, this] (const mesh::Vertex & vertex) -> bool {
+      return (filterByBB && this->isVertexInBB(vertex)) || (not filterByBB && vertex.isTagged());
+  };
+
+  size_t newSize = std::count_if(_mesh->vertices().begin(), _mesh->vertices().end(), vertexSelector);
+  filteredMesh.vertices().reserve(filteredMesh.vertices().size() + newSize);
+
   for (const mesh::Vertex &vertex : _mesh->vertices()) {
 
-    if ((filterByBB && isVertexInBB(vertex)) || (not filterByBB && vertex.isTagged())) {
+    if (vertexSelector(vertex)) {
       mesh::Vertex &v = filteredMesh.createVertex(vertex.getCoords());
       v.setGlobalIndex(vertex.getGlobalIndex());
       if (vertex.isTagged())
