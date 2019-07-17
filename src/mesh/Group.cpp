@@ -117,6 +117,14 @@ bool Group:: empty() const
   return _vertices.empty() && _edges.empty() && _triangles.empty() && _quads.empty();
 }
 
+void Group::shrink_to_fit()
+{
+    _vertices.shrink_to_fit();
+    _edges.shrink_to_fit();
+    _triangles.shrink_to_fit();
+    _quads.shrink_to_fit();
+}
+
 size_t Group:: size() const
 {
   return _vertices.size() + _edges.size() + _triangles.size() + _quads.size();

@@ -434,6 +434,12 @@ void Mesh:: clear()
   }
 }
 
+void Mesh::shrink_to_fit()
+{
+    _content.shrink_to_fit();
+    _propertyContainers.shrink_to_fit();
+}
+
 Mesh::VertexDistribution &Mesh::getVertexDistribution()
 {
   return _vertexDistribution;

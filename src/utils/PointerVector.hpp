@@ -125,6 +125,16 @@ public:
    }
 
    /**
+    * @brief Shrinks the vector to the minimum required size.
+    *
+    * @warning This is a binding request!
+    */
+   void shrink_to_fit()
+   {
+       container(_content.begin(), _content.end()).swap(_content);
+   }
+
+   /**
     * @brief Removes all pointers to elements from the vector (no deletetion).
     */
    void clear ()

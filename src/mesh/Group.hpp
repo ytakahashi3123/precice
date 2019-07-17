@@ -112,6 +112,13 @@ public:
    size_t size() const;
 
    /**
+    * @brief Shrinks underlying containers to the required size
+    *
+    * @warning This is a binding request!
+    */
+   void shrink_to_fit();
+
+   /**
     * @brief Removes all references to elements in the group.
     */
    void clear();

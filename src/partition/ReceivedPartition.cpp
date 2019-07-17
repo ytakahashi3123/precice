@@ -113,6 +113,7 @@ void ReceivedPartition::compute()
       mesh::Mesh filteredMesh("FilteredMesh", _dimensions, _mesh->isFlipNormals());
       filterMesh(filteredMesh, true);
       _mesh->clear();
+      _mesh->shrink_to_fit();
       _mesh->addMesh(filteredMesh);
       _mesh->computeState();
       DEBUG("Master mesh after filtering, #vertices " << _mesh->vertices().size());
@@ -160,6 +161,7 @@ void ReceivedPartition::compute()
 
       DEBUG("Bounding box filter, filtered from " << _mesh->vertices().size() << " vertices to " << filteredMesh.vertices().size() << " vertices.");
       _mesh->clear();
+      _mesh->shrink_to_fit();
       _mesh->addMesh(filteredMesh);
       _mesh->computeState();
       e2.stop();
@@ -194,6 +196,7 @@ void ReceivedPartition::compute()
   filterMesh(filteredMesh, false);
   DEBUG("Mapping filter, filtered from " << _mesh->vertices().size() << " vertices to " << filteredMesh.vertices().size() << " vertices.");
   _mesh->clear();
+  _mesh->shrink_to_fit();
   _mesh->addMesh(filteredMesh);
   _mesh->computeState();
   e5.stop();

@@ -246,6 +246,13 @@ public:
    */
   void clear();
 
+  /**
+    * @brief Shrinks the used resources to the minimum required size.
+    *
+    * @warning This is a binding request!
+   */
+  void shrink_to_fit();
+
   /// Returns a mapping from rank to used (not necessarily owned) vertex IDs
   VertexDistribution & getVertexDistribution();
 
