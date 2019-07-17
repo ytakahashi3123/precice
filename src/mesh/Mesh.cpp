@@ -484,6 +484,7 @@ void Mesh:: addMesh(
   std::map<int, Vertex*> vertexMap;
   std::map<int, Edge*> edgeMap;
 
+  vertices().reserve(vertices().size() + deltaMesh.vertices().size());
   Eigen::VectorXd coords(_dimensions);
   for ( const Vertex& vertex : deltaMesh.vertices() ){
     coords = vertex.getCoords();
@@ -498,6 +499,7 @@ void Mesh:: addMesh(
   // you cannot just take the vertices from the edge and add them,
   // since you need the vertices from the new mesh
   // (which may differ in IDs)
+  edges().reserve(edges().size() + deltaMesh.edges().size());
   for (const Edge& edge : deltaMesh.edges()) {
     int vertexIndex1 = edge.vertex(0).getID();
     int vertexIndex2 = edge.vertex(1).getID();
@@ -508,6 +510,7 @@ void Mesh:: addMesh(
   }
 
   if(_dimensions==3){
+    triangles().reserve(triangles().size() + deltaMesh.triangles().size());
     for (const Triangle& triangle : deltaMesh.triangles() ) {
       int edgeIndex1 = triangle.edge(0).getID();
       int edgeIndex2 = triangle.edge(1).getID();

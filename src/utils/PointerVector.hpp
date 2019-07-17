@@ -76,6 +76,14 @@ public:
    }
 
    /**
+    * @brief Resize to n if current size is smaller
+    */
+   void reserve(size_t n)
+   {
+      _content.reserve(n);
+   }
+
+   /**
     * @brief Returns reference to element with given index [0, count[.
     */
    CONTENT_T & operator[] ( size_t index )
