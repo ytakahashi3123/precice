@@ -34,11 +34,6 @@
 #include "partition/ProvidedPartition.hpp"
 #include "versions.hpp"
 
-#include <csignal> // used for installing crash handler
-#ifndef SIGXCPU
-#define SIGXCPU 24 /* exceeded CPU time limit */
-#endif
-
 #include <utility>
 #include <algorithm>
 
@@ -78,16 +73,7 @@ SolverInterfaceImpl:: SolverInterfaceImpl
         "Accessor process index has to be smaller than accessor process "
         << "size (given as " << _accessorProcessRank << ")!");
 
-  /* When precice stops abruptly, e.g. an external solver crashes, the
-     SolverInterfaceImpl destructor is never called. Since we still want
-     to print the timings, we install the signal handler here. */
-  // Disable SIGSEGV handler, because we don't want to interfere with crash backtrace.
-  // signal(SIGSEGV, precice::utils::terminationSignalHandler);
-  signal(SIGABRT, precice::utils::terminationSignalHandler);
-  signal(SIGTERM, precice::utils::terminationSignalHandler);
-  // SIGXCPU is emitted when the job is killed due to walltime limit on SuperMUC
-  signal(SIGXCPU, precice::utils::terminationSignalHandler);
-  // signal(SIGINT,  precice::utils::terminationSignalHandler);
+  utils::installSignals();
 
   logging::setParticipant(_accessorName);
 }
