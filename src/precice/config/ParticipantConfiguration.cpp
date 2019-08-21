@@ -307,7 +307,7 @@ void ParticipantConfiguration:: xmlTagCallback
     if (safetyFactor < 0){
       std::ostringstream stream;
       stream << "Safety Factor must be positive or 0";
-      throw std::runtime_error{stream.str()};
+      PRECICE_ERROR(stream.str());
     }
     bool provide = tag.getBooleanAttributeValue(ATTR_PROVIDE);
     mesh::PtrMesh mesh = _meshConfig->getMesh(name);
@@ -315,14 +315,14 @@ void ParticipantConfiguration:: xmlTagCallback
       std::ostringstream stream;
       stream << "Participant \"" << _participants.back()->getName()
              << "\" uses mesh \"" << name << "\" which is not defined";
-      throw std::runtime_error{stream.str()};
+      PRECICE_ERROR(stream.str());
     }
     if ((geoFilter != partition::ReceivedPartition::GeometricFilter::BROADCAST_FILTER || safetyFactor != 0.5) && from==""){
       std::ostringstream stream;
       stream << "Participant \"" << _participants.back()->getName()
              << "\" uses mesh \"" << name << "\" which is not received (no \"from\"), but has a geometric-filter and/or"
              << " a safety factor defined. This is not valid.";
-      throw std::runtime_error{stream.str()};
+      PRECICE_ERROR(stream.str());
     }
     _participants.back()->useMesh ( mesh, offset, false, from, safetyFactor, provide, geoFilter );
   }

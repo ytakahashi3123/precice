@@ -233,7 +233,7 @@ void CouplingSchemeConfiguration::xmlTagCallback(
       std::ostringstream stream;
       stream << "Mesh \"" << nameMesh << "\" with data \"" << nameData
              << "\" not defined at definition of coupling scheme";
-      throw std::runtime_error{stream.str()};
+      PRECICE_ERROR(stream.str());
     }
     _meshConfig->addNeededMesh(nameParticipantFrom, nameMesh);
     _meshConfig->addNeededMesh(nameParticipantTo, nameMesh);
@@ -827,11 +827,11 @@ void CouplingSchemeConfiguration::addDataToBeExchanged(
     PRECICE_CHECK(to != from, "You cannot define an exchange from and to the same participant");
 
     if (not(utils::contained(from, _config.participants) || from == _config.controller)) {
-      throw std::runtime_error{"Participant \"" + from + "\" is not configured for coupling scheme"};
+      PRECICE_ERROR("Participant \"" + from + "\" is not configured for coupling scheme");
     }
 
     if (not(utils::contained(to, _config.participants) || to == _config.controller)) {
-      throw std::runtime_error{"Participant \"" + to + "\" is not configured for coupling scheme"};
+      PRECICE_ERROR("Participant \"" + to + "\" is not configured for coupling scheme");
     }
 
     bool initialize = get<4>(tuple);
@@ -858,11 +858,11 @@ void CouplingSchemeConfiguration::addMultiDataToBeExchanged(
     const std::string &to   = get<3>(tuple);
 
     if (not(utils::contained(from, _config.participants) || from == _config.controller)) {
-      throw std::runtime_error{"Participant \"" + from + "\" is not configured for coupling scheme"};
+      PRECICE_ERROR("Participant \"" + from + "\" is not configured for coupling scheme");
     }
 
     if (not(utils::contained(to, _config.participants) || to == _config.controller)) {
-      throw std::runtime_error{"Participant \"" + to + "\" is not configured for coupling scheme"};
+      PRECICE_ERROR("Participant \"" + to + "\" is not configured for coupling scheme");
     }
 
     bool initialize = get<4>(tuple);
